@@ -1,0 +1,179 @@
+\section{Introduction}%
+\label{sec:introduction}
+
+Quantum computing research has had significant implications for cryptography~\cite{You_2005, Kelly_2015}.
+Currently, the most widely used asymmetric (i.e., public-key) cryptographic protocols rely on the conjectured intractability of number-theoretic problems like integer factorization and computing discrete logarithms.
+However, these problems are known to be easy for large-scale quantum computers, so these computers (if they are ever built) would be able to completely break the world's most prevalent cryptography.
+
+Motivated by this potentially catastrophic threat, standards bodies and government agencies have initiated efforts to standardize quantum-safe, or ``post-quantum,'' cryptography---i.e., systems that can be run on today's ordinary computers and networks, and are believed to be secure against quantum attacks.
+In 2017, the National Institute of Standards and Technology (NIST) launched a large-scale project to select and standardize quantum-safe algorithms for digital signature, encryption, and key-establishment protocols~\cite{NIST17}.
+% including the National Institute of Standards and Technology (NIST), the National Security Agency (NSA), and the PQCRYPTO project funded by the European Union \cite{Crpyto_today, NIST17}.
+Among the candidates, schemes based on lattice problems---particularly the learning with errors~(LWE)~\cite{Reg09} and short integer solution~(SIS)~\cite{STOC:Ajtai96} problems, and their variants---emerged as especially promising.
+% Lattice cryptography has been able to build practical, quantum safe counterparts to existing primitives, such as public key encryption schemes and key exchange mechanisms, and has also enabled new primitives, such as fully homomorphic encryption.
+A significant milestone was achieved in 2022 when NIST selected two lattice-based schemes for standardization: CRYSTALS-Kyber, a key-encapsulation mechanism renamed as ML-KEM~\cite{MLKEM}, and CRYSTALS-Dilithium, a signature scheme renamed as ML-DSA~\cite{MLDSA}.
+Both of these schemes are based on the Module-LWE problem, a variant of LWE with additional algebraic structure for efficiency purposes.
+Additionally, NIST selected Falcon, another lattice-based signature scheme, and SPHINCS$^+$, a hash-based signature scheme.
+
+Despite the promising security and efficiency profiles of the algorithms selected by NIST, several government agencies have expressed a desire for more conservative options with less underlying algebraic structure.
+The two most notable examples are Classic McEliece~\cite{CME}, from the code-based family, and \FrodoKEM, from the lattice-based family.
+These algorithms have been recommended as conservative alternatives by the German BSI~\cite{BSI}, the French ANSSI~\cite{ANSSI}, and the Dutch NLNCSA and AIVD~\cite{AIVD}.\footnote{In the latest edition of the PQC migration handbook~\cite{Dutch_HB}, the Dutch AIVD, CWI and TNO describe \FrodoKEM and Classic McEliece as more conservative options and ``strongly support ongoing initiatives aiming to standardise them''.
+  The document classifies both algorithms as ``acceptable'' until their standardization is completed.}
+Notably, Classic McEliece and \FrodoKEM, alongside ML-KEM, are currently undergoing standardization by the International Organization for Standardization (ISO)~\cite{ISO}.
+
+%Given the high cost and slow deployment of entirely new cryptographic systems, the desired decades-long lifetime of such systems, and the unpredictable trajectory of quantum computing technology and quantum cryptanalysis over the coming years, we argue that any post-quantum standard should follow a conservative approach that errs comfortably on the side of security and simplicity over performance and (premature) optimization. This principle permeates the design choices behind FrodoKEM, as we now describe.
+
+In this paper, we describe \FrodoKEM, a family of \INDCCA secure key-encapsulation mechanisms (KEMs).
+\FrodoKEM is designed as a conservative yet practical post-quantum construction whose security derives from cautious parameterizations of the well-studied learning with errors (LWE) problem.
+In turn, LWE has close connections to conjectured-hard problems on generic, “algebraically unstructured” lattices.
+
+%$\FrodoKEM$ is an $\indcca$ secure key encapsulation mechanism, based on learning with errors. FrodoKEM is relies on plain LWE, and therefore is more conservative in it's assumptions than other lattice-based KEM's, which rely on structured variants of learning with errors (Ring LWE, and Module-LWE), but is still practical, and safe against known quantum threats.
+
+\subsection{Pedigree}
+
+The core of \FrodoKEM is a public-key encryption scheme called
+\FrodoPKE, whose $\INDCPA$ security is tightly related to the
+hardness of a corresponding learning with errors problem. Here
+we briefly recall the scientific lineage of these systems.  See the
+surveys~\cite{Micciancio10,RegevLWESurvey,DBLP:journals/fttcs/Peikert16}
+for further details.
+
+The seminal works of Ajtai~\cite{STOC:Ajtai96} (published in 1996) and
+Ajtai--Dwork~\cite{STOC:AjtDwo97} (published in 1997) gave the first
+cryptographic constructions whose security properties followed from
+the conjectured \emph{worst-case} hardness of various problems on
+point \emph{lattices} in $\bbR^{n}$.  In subsequent years, these works were
+substantially refined and improved, e.g.,
+in~\cite{EPRINT:GolGolHal96a,FOCS:CaiNer97,STOC:Micciancio02,DBLP:journals/jacm/Regev04,DBLP:journals/siamcomp/MicciancioR07}.
+Notably, in work published in 2005, Regev~\cite{Reg09} defined the
+\emph{learning with errors}~(LWE) problem, proved the hardness of
+(certain parameterizations of) LWE assuming the hardness of various
+worst-case lattice problems for \emph{quantum} algorithms, and
+defined a public-key encryption scheme whose $\INDCPA$ security is
+tightly related to the hardness of LWE.\footnote{As pointed out
+  in~\cite{TCC:Peikert09_slides}, Regev's encryption scheme implicitly
+  contains an (unauthenticated) ``approximate'' key-exchange protocol
+  analogous to the classic Diffie--Hellman protocol~\cite{DifHel76}.}
+
+Regev's initial work on LWE was followed by much more, which, among
+other things:
+\begin{itemize}
+\item provided additional theoretical support for the hardness of
+  various LWE parameterizations
+  (e.g.,~\cite{STOC:Peikert09,C:ACPS09,STOC:BLPRS13,EC:DotMul13,C:MicPei13,STOC:PeiRegSte17}),
+\item extensively analyzed the concrete security of LWE and closely
+  related lattice problems
+  (e.g.,~\cite{MR09:_post_quant_crypt,AC:CheNgu11,RSA:LiuNgu13,ICISC:AlbFitGop13,ChenThesis,EPRINT:ACFP14,PKC:AFFP14,LaarhovenThesis,C:KirFou15,albrecht15:_concrete_lwe,USENIX:ADPS16,CCS:BCDMNN16,EC:Albrecht17,EPRINT:AGVW17},
+  among countless others), and
+\item constructed LWE-based cryptosystems with improved efficiency or
+  additional functionality
+  (e.g.,~\cite{STOC:PeiWat08,C:PeiVaiWat08,STOC:GenPeiVai08,JC:CHKP12,FOCS:BraVai11,C:GenSahWat13,EC:BGGHNS14,C:GorVaiWee15}).
+\end{itemize}
+In particular, in work published in 2011, Lindner and
+Peikert~\cite{RSA:LinPei11} gave a more efficient LWE-based public-key
+encryption scheme that uses a square public matrix
+$\bfA \in \bbZ_{q}^{n \times n}$ instead of an oblong rectangular one.
+%  that relies on a similar proof
+% structure as the ring-LWE-based scheme from~\cite{EC:LyuPeiReg10}.
+
+\paragraph{Cryptographic schemes named ``Frodo''.}
+
+Since there are now several cryptographic schemes incorporating the name ``Frodo'', we take a moment to clarify how they are related.
+
+\begin{itemize}
+\item \textbf{``Frodo'' / \FrodoCCS.}
+  An LWE-based key exchange protocol called ``Frodo'' was published at the 2016 ACM CCS conference~\cite{CCS:BCDMNN16}, based on the Lindner--Peikert scheme~\cite{RSA:LinPei11} with some modifications, such as: pseudorandom generation of the public matrix~$\bfA$ from a small seed, more balanced key and ciphertext sizes, and new LWE parameters.
+  For clarity, we refer to this as \FrodoCCS.
+\item \textbf{\FrodoKEM (NIST submission versions).}
+  An LWE-based KEM called \FrodoKEM was submitted to the NIST Post-Quantum Cryptography standardization project.
+  At its heart is a public-key encryption scheme called \FrodoPKE, to which a Fujisaki--Okamoto-type transform~\cite{PKC:FujOka99} is applied to obtain a KEM with \INDCCA security.
+  Some differences between \FrodoCCS and \FrodoKEM / \FrodoPKE (NIST submission versions) include:
+  \begin{itemize}
+  \item \FrodoCCS was described as an unauthenticated key-exchange protocol, which can equivalently be viewed as an \INDCPA-secure KEM, whereas \FrodoKEM is designed to be an \INDCCA-secure KEM.
+  \item \FrodoCCS used a ``reconciliation mechanism'' to extract shared-key bits from approximately equal values (similarly to~\cite{EPRINT:DinXieLin12,PQCRYPTO:Peikert14,SP:BCNS15,USENIX:ADPS16}), whereas \FrodoKEM used simpler key transport via public-key encryption (as in~\cite{Reg09,RSA:LinPei11}).
+  \item \FrodoKEM used significantly ``wider'' LWE error distributions than \FrodoCCS used, which conform to certain worst-case hardness theorems (see \autoref{sec:strength:lattice}).
+  \item \FrodoKEM used different symmetric-key primitives than \FrodoCCS did.
+  \end{itemize}
+  Note that \FrodoPKE and \FrodoKEM changed between the first and second rounds of the NIST PQC standardization project.
+\item \textbf{\FrodoKEM and \eFrodoKEM (ISO submission version~\cite{ISOdraft}, and this document).}
+  In response to concerns about multi-ciphertext attacks (see \autoref{sec:intro:multi-challenge} below), a new version of \FrodoKEM was defined that included a \emph{salt} as a countermeasure.
+  As of the ISO submission version, the name \eFrodoKEM (with the ``e'' meaning ``ephemeral'') refers to the un-salted version (which is equivalent to the NIST Round~3 version of \FrodoKEM), and the name \FrodoKEM refers to the salted version.
+  The \FrodoPKE scheme remains unchanged since the Round 2 version.
+\item We also use the name ``\FrodoKEM'' to refer to the overall family of schemes consisting of the ephemeral KEM \eFrodoKEM and the salted KEM \FrodoKEM.
+\end{itemize}
+
+\subsection{Structured versus unstructured lattices}
+
+Problems that underlie the security of cryptographic protocols often have special ``structured'' instances, whose use may offer better efficiency or other advantages, but may also introduce security vulnerabilities that are not present in the general case.
+In certain cases, the security/efficiency trade-off associated with special instances can be well understood and balanced\cpnote{is this example really so well understood? How about the range of exponents in dlog instead?}
+(for example, small decryption exponents in RSA).
+In other cases, the presence and degree of security loss from using structured instances remains unknown or not well understood.
+
+In lattice-based cryptography, the (plain) LWE problem relates to solving a “noisy” linear system (modulo a known integer); it can also be interpreted as the problem of decoding a random “unstructured” lattice from a certain broad class.
+There are also several variants of LWE where the linear system (and its associated lattice) has additional algebraic structure, which offers advantages in terms of computational efficiency and size.
+These variants include Ring-LWE~\cite{DBLP:journals/jacm/LyubashevskyPR13}, Module-LWE~\cite{ITCS:BraGenVai12,DBLP:journals/dcc/LangloisS15} and the NTRU problem~\cite{HofPipSil98}.
+Against the NTRU problem, there have been a number of attacks which exploit the algebraic structure~\cite{Soliloquy, EfficientClass}.\cpnote{These attacks do \emph{not} apply to NTRU, but only some ad-hoc ideal-lattice problems (principal with promised short generator).
+  There are also the papers that obtain better subexp approx factors for worst-case ideal lattices, which we should cite here.}
+Though these attacks do not extend to Ring-LWE or Module-LWE, they demonstrate that algebraic structure in lattices may allow for attacks that are not possible on generic lattices.
+
+\subsection{Multi-challenge security}%
+\label{sec:intro:multi-challenge}
+
+\paragraph{Multi-key security.}
+
+Multi-key (also known as multi-user) attacks aim to break security against \emph{any one} of many available public keys.\footnote{In the literature, multi-key attacks are sometimes also known as multi-\emph{target} attacks, but the latter term can also refer to multi-\emph{ciphertext} attacks.
+  So, to avoid ambiguity, we eschew the term ``multi-target.''}
+In its call for proposals for the post-quantum standardization process~\cite{NIST17}, NIST lists ``resistance to multi-key attacks'' as a ``desirable property.''
+
+\FrodoKEM's primary security target of \INDCCA considers only a single public key, so multi-key attacks fall outside its immediate scope.
+However, multi-key security generically follows from \INDCCA security by a routine hybrid argument, with linear concrete security loss in the number of keys.
+In addition, all versions of \FrodoKEM (and \FrodoCCS before it) include a specific countermeasure against multi-key attacks, namely, a distinct LWE matrix~$\bfA$ for each public key.
+
+\paragraph{Multi-ciphertext security.}
+
+Multi-ciphertext attacks target a single public key, but aim to break \emph{any one} of many ciphertexts produced under that key.
+As above, multi-ciphertext security falls outside the scope of \FrodoKEM's primary security target of \INDCCA, and (in contrast with multi-key security) NIST's call for proposals did not mention multi-ciphertext security.
+However, it is a desirable feature in applications where a large number of ciphertexts will be encrypted under the same public key.
+
+In 2021, a multi-ciphertext attack against the Round-3 \FrodoKEMLOne parameters (for NIST security level 1) and proposed fix was identified by NIST~\cite{perlner21}; the same attack was also identified by Bernstein in~\cite{EPRINT:Bernstein22d}.
+Although the attack does not invalidate any of the security claims from the \FrodoKEM submission, it may be of concern for applications with long-lived public keys.
+For this reason, subsequent versions of \FrodoKEM specifically target multi-ciphertext security (and multi-challenge security more generically; see below) via a \emph{salted} version of the Fujisaki--Okamoto transform.
+For compatibility purposes, and for applications where the number of ciphertexts produced under any single public key is fairly small, there is \emph{ephemeral} \FrodoKEM (or \eFrodoKEM), which is identical to Round-3 \FrodoKEM.
+
+The multi-ciphertext attack stems from \FrodoKEMLOne's message length of 128 bits, and the fact that encryption is deterministic, which is true of any KEM built from the Fujisaki--Okamoto transform.
+More specifically, when there are~$n$ challenge ciphertexts available, an adversary can sample~$N$ distinct messages, and calculate the corresponding ciphertexts and KEM keys.
+If a collision is found (between one of the challenge ciphertexts and one of the generated ciphertexts), the adversary succeeds in breaking one-wayness, and thereby indistinguishability.
+By the birthday approximation, the probability of finding a collision is approximately $nN/\abs{M}$, where~$M$ is the message space and $n,N \ll \abs{M}$.
+In particular, with \FrodoKEMLOne's message space of size $|M| = 2^{128}$, and (say) $n=2^{40}$ challenge ciphertexts, an adversary can break multi-ciphertext security by doing about $N = 2^{88}$ encryptions (and the collision search).
+
+\paragraph{Multi-challenge security.}
+
+Multi-challenge security unifies both multi-key and multi-ciphertext security.
+Here, the adversary is given potentially several public keys and ciphertexts, where each ciphertext is generated under one of the public keys of the adversary's choice.\footnote{For a finer-grained notion, one can limit the total number of ciphertexts that may be generated under any single key.}
+To obtain multi-challenge security, \FrodoKEM uses the above-mentioned Salted Fujisaki--Okamoto ($\SFO$) transform, and hashing of public keys.
+The efficacy of these techniques was proven in~\cite{GlabushThesis}.
+
+% CJP: suppressing this technical stuff about oracles and specific notation, which isn't used.
+% The adversary is given access to a challenge oracle, which takes as input an index~$i$, and returns a ciphertext, encrypted under $pk_{i}$, and the corresponding KEM key.
+% Denote $n_j$ as the number of queries the adversary makes under public key $pk_j$.
+% We fix a threshold for $n$, say $2^{80}$, which models the total number of instances in which the protocol is used.
+% Furthermore, it may be realistic to also restrict the number of queries the adversary can make to the challenge oracle for a single $j$, for example, by restricting $n_i \leq 2^{64}$ for all $i \in [u]$.
+
+\subsection{Our contributions}
+
+In this work, we present and analyze \FrodoKEM, a family of key-encapsulation mechanisms that rely on the learning with errors problem to obtain security against known quantum threats.
+Our focus is on members of the \FrodoKEM family presented in the ISO submission~\cite{ISOdraft}, namely: \eFrodoKEM, the IND-CCA-secure KEM built from \FrodoPKE using the Fujisaki--Okamoto ($\FOnotperpprime$) transform; and \FrodoKEM, the multi-challenge-IND-CCA-secure KEM built from \FrodoPKE using the salted FO transform.
+Supporting algorithms for \FrodoKEM are presented in \autoref{sec:algs}, \FrodoPKE is presented in \autoref{sec:cpa-pke}, and \FrodoKEM is presented in \autoref{sec:cca-kem}.
+
+Given the existing work on past versions of Frodo in~\cite{CCS:BCDMNN16,NISTPQC-R1:FrodoKEM17,NISTPQC-R2:FrodoKEM19,NISTPQC-R3:FrodoKEM20,ISOdraft}, the specific contributions of this work are as follows.
+\begin{itemize}
+\item We apply the analysis of the salted FO transform \cpnote{update ref:} of~\cite{Multi-challenge} to derive results on the multi-challenge (i.e., multi-key and multi-ciphertext) security of \FrodoKEM, addressing the multi-ciphertext attack described in \autoref{sec:intro:multi-challenge}.
+ These results, reported in \autoref{sec:strength:justification} and \autoref{sec:Security_appendix}, include bounds in the quantum random oracle model.
+\item In \autoref{sec:params} and \autoref{sec:attack:cryptanalytic}, we incorporate recent cryptanalytic developments into our estimates for the security levels of the three parameterizations \FrodoLOne, \FrodoLThree, and \FrodoLFive.
+\item In \autoref{sec:performance} we provide updated implementations and performance measurements for \FrodoKEM and \eFrodoKEM on Intel x64 and ARM platforms, with an optimized C implementation taking advantage of AES-NI and AVX2 instructions on Intel x64.
+ These implementations are available anonymized as part of this submission at \url{https://doi.org/10.5281/zenodo.14633189}.
+\end{itemize}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

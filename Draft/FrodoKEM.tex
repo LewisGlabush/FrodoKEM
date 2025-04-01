@@ -1,0 +1,176 @@
+\section{$\FrodoKEM$: \INDCCA-secure key encapsulation}%
+\label{sec:cca-kem}
+
+This section defines $\FrodoKEM$, a key encapsulation mechanism that is derived from $\FrodoPKE$ by applying the $\SFOnotperpprime$ transform.
+%Some readers may be familiar with the version of $\FrodoKEM$ submitted to the NIST post-quantum cryptography standardization project, available in \cite{spec}. We refer to that version as $\eFrodoKEM$ or "ephemeral" $\FrodoKEM$ that is intended for applications in which the number of ciphertexts produced relative to any single public key is small. We highlight changes from $\eFrodoKEM$ in red. 
+$\FrodoKEM$ is parameterized by the following:
+\begin{itemize}
+\item $q=2^D$, a power-of-two integer modulus with exponent $D \leq 16$;
+\item $n, \mbar, \nbar$, integer matrix dimensions with $n \equiv 0 \pmod {16}$;
+\item $B \le D$, the number of bits encoded in each matrix entry;
+\item $\ell=B\cdot \mbar\cdot\nbar$, the length of bit strings to be encoded in an $\mbar$-by-$\nbar$ matrix;
+\item $\lengthm = \ell$, the bit length of messages;
+\item $\MsgSp = \{0,1\}^\lengthm$, the message space;
+\item $\lengthseedA$, the bit length of seeds used for pseudorandom matrix generation;
+\item $\lengthseedSE$, the bit length of seeds used for pseudorandom bit generation for error sampling;
+\item $\Frodo.\gen$, pseudorandom matrix generation algorithm, either \autoref{alg:genA_AES} or \autoref{alg:genA_SHAKE};
+\item $T_\chi$, distribution table for sampling;
+\item $\lengths$, the length of the bit vector $\bfs$ used for pseudorandom shared secret generation in the event of decapsulation failure in the $\SFOnotperpprime$ transform;
+\item $\lengthz$, the bit length of seeds used for pseudorandom generation of $\seedA$;
+\item {\color{black}$\lengthsalt$, the bit length of $\salt$;}
+\item $\lengthK$, the bit length of intermediate shared secret $\bfk$ in the $\SFOnotperpprime$ transform;
+\item $\lengthpkhash$, the bit length of the hash $G_1(\pk)$ of the public key in the $\SFOnotperpprime$ transform;
+\item $\lengthss$, the bit length of shared secret $\ssk$ in the $\SFOnotperpprime$ transform;
+\end{itemize}
+
+\begin{algorithm}[t]
+\caption{\label{alg:KEM:KeyGen} $\FrodoKEM.\KeyGen$.}
+{\bf Input:} None.\\
+{\bf Output:} Key pair $(\pk, \sk')$ with $\pk \in \{0,1\}^{\lengthseedA + D\cdot n \cdot \nbar}$, $\sk' \in \{0,1\}^{\lengths + \lengthseedA + D\cdot n \cdot \nbar}\times \bbZ_q^{\nbar\times n} \times \{0,1\}^{\lengthpkhash}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE Choose uniformly random seeds $\bfs \| \seedSE\| \bfz \getsr U(\{0,1\}^{\lengths + \lengthseedSE + \lengthz})$
+    \STATE Generate pseudorandom seed $\seedA \gets \SHAKE(\bfz, \lengthseedA)$
+    \STATE Generate the matrix $\bfA \in \bbZ_q^{n \times n}$ via $\bfA\gets\Frodo.\gen(\seedA)$
+    \STATE Generate pseudorandom bit string $ (\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(2n\nbar-1)}) \gets \SHAKE(\mathtt{0x5F} \| \seedSE,$ $2n\nbar \cdot \lengthchi)$
+    \STATE Sample error matrix $\bfS^\text{T} \gets \Frodo.\SampV((\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(n\nbar-1)}), \nbar, n, T_\chi)$
+    \STATE Sample error matrix $\bfE \gets \Frodo.\SampV((\bfr^{(n\nbar)}, \bfr^{(n\nbar+1)}, \dots, \bfr^{(2n\nbar-1)}), n, \nbar, T_\chi)$
+    \STATE Compute $\bfB \gets \bfA\bfS + \bfE$
+    \STATE Compute $\bfb \gets \Frodo.\Pack(\bfB)$
+    \STATE Compute $\pkh \gets \SHAKE(\seedA\| \bfb, \lengthpkhash)$
+    \RETURN public key $\pk \gets \seedA\| \bfb$ and secret key $\sk' \gets (\bfs \| \seedA \| \bfb, \bfS^\text{T}, \pkh)$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[t]
+\caption{\label{alg:KEM:Encaps} $\FrodoKEM.\Encaps$.}
+{\bf Input:} Public key $\pk = \seedA\| \bfb \in \{0,1\}^{\lengthseedA + D\cdot n \cdot \nbar}$.\\
+{\bf Output:} Ciphertext $\bfc_1\| \bfc_2{\color{black}\| \salt}\in \{0,1\}^{(\mbar\cdot n +\mbar\cdot\nbar)D{\color{black}+\lengthsalt}}$ and shared secret $\ssk \in \{0,1\}^\lengthss$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE Choose uniformly random values $\mu \getsr U(\{0,1\}^\lengthm)$ {\color{black}and $\salt \getsr U(\{0,1\}^\lengthsalt$)}
+    \STATE Compute $\pkh \gets \SHAKE(\pk, \lengthpkhash)$
+    \STATE Generate pseudorandom values $\seedSE\| \bfk \gets \SHAKE(\pkh \| \mu{\color{black}\| \salt}, \lengthseedSE + \lengthK)$
+    \STATE Generate pseudorandom bit string $ (\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(2\mbar n+\mbar\nbar-1)}) \gets \SHAKE(\mathtt{0x96} \|$ $\seedSE, (2\mbar n+\mbar\nbar) \cdot \lengthchi)$
+    \STATE Sample error matrix $\bfS' \gets \Frodo.\SampV((\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(\mbar n-1)}), \mbar, n, T_\chi)$
+    \STATE Sample error matrix $\bfE' \gets \Frodo.\SampV((\bfr^{(\mbar n)}, \bfr^{(\mbar n+1)}, \dots, \bfr^{(2\mbar n-1)}), \mbar, n,$ $T_\chi)$
+    \STATE Generate $\bfA\gets \Frodo.\gen(\seedA)$
+    \STATE Compute $\bfB' \gets \bfS'\bfA + \bfE'$
+    \STATE Compute $\bfc_1 \gets \Frodo.\Pack(\bfB')$
+    \STATE Sample error matrix $\bfE'' \gets \Frodo.\SampV((\bfr^{(2\mbar n)}, \bfr^{(2\mbar n+1)}, \dots, \bfr^{(2\mbar n+\mbar\nbar-1)}),$ $\mbar, \nbar, T_\chi)$
+    \STATE Compute $\bfB \gets \Frodo.\Unpack(\bfb,n,\nbar)$
+    \STATE Compute $\bfV \gets \bfS'\bfB + \bfE''$
+    \STATE Compute $\bfC \gets \bfV + \Frodo.\Encode(\mu)$
+    \STATE Compute $\bfc_2 \gets \Frodo.\Pack(\bfC)$
+    \STATE Compute $\ssk \gets \SHAKE(\bfc_1 \| \bfc_2{\color{black}\| \salt} \| \bfk, \lengthss)$
+    \RETURN ciphertext $\bfc_1 \| \bfc_2{\color{black}\| \salt}$ and shared secret $\ssk$
+    \end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+\caption{\label{alg:KEM:Decaps} $\FrodoKEM.\Decaps$.}
+{\bf Input:} Ciphertext $\bfc_1 \| \bfc_2{\color{black}\| \salt} \in \{0,1\}^{(\mbar\cdot n +\mbar\cdot\nbar)D {\color{black}+\lengthsalt}}$, secret key $\sk' = (\bfs \| \seedA \| \bfb, \bfS^\text{T}, \pkh) \in  \{0,1\}^{\lengths + \lengthseedA +D\cdot n \cdot \nbar}\times \bbZ_q^{\nbar\times n} \times \{0,1\}^{\lengthpkhash}$.\\
+{\bf Output:} Shared secret $\ssk \in \{0,1\}^\lengthss$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE $\bfB' \gets \Frodo.\Unpack(\bfc_1, \mbar, n)$
+    \STATE $\bfC \gets \Frodo.\Unpack(\bfc_2, \mbar, \nbar)$    
+    \STATE Compute $\bfM \gets \bfC - \bfB'\bfS$
+    \STATE Compute $\mu' \gets \Frodo.\Decode(\bfM)$
+    \STATE Parse $\pk \gets \seedA \|\bfb$
+    \STATE Generate pseudorandom values $\seedSE'\| \bfk' \gets \SHAKE(\pkh \| \mu'{\color{black}\| \salt}, \lengthseedSE + \lengthK)$
+   \STATE Generate pseudorandom bit string $ (\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(2\mbar n+\mbar\nbar-1)}) \gets \SHAKE(\mathtt{0x96} \|$ $\seedSE', (2\mbar n+\mbar\nbar) \cdot \lengthchi)$
+    \STATE Sample error matrix $\bfS' \gets \Frodo.\SampV((\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(\mbar n-1)}), \mbar, n, T_\chi)$
+    \STATE Sample error matrix $\bfE' \gets \Frodo.\SampV((\bfr^{(\mbar n)}, \bfr^{(\mbar n+1)}, \dots, \bfr^{(2\mbar n-1)}), \mbar, n,$ $T_\chi)$
+    \STATE Generate $\bfA\gets \Frodo.\gen(\seedA)$
+    \STATE Compute $\bfB'' \gets \bfS'\bfA + \bfE'$
+    \STATE Sample error matrix $\bfE'' \gets \Frodo.\SampV((\bfr^{(2\mbar n)}, \bfr^{(2\mbar n+1)}, \dots, \bfr^{(2\mbar n+\mbar\nbar-1)}),$ $\mbar, \nbar, T_\chi)$
+    \STATE Compute $\bfB \gets \Frodo.\Unpack(\bfb,n,\nbar)$
+    \STATE Compute $\bfV \gets \bfS'\bfB + \bfE''$
+    \STATE Compute $\bfC' \gets \bfV + \Frodo.\Encode(\mu')$
+    \STATE (in constant time) $\overline{\bfk} \gets \bfk'$ if $(\bfB' \| \bfC = \bfB'' \| \bfC')$ else $\overline{\bfk} \gets \bfs$
+    \STATE Compute $\ssk \gets \SHAKE(\bfc_1 \| \bfc_2{\color{black}\| \salt} \| \overline{\bfk}, \lengthss)$
+    \RETURN shared secret $\ssk$
+    \end{algorithmic}
+\end{algorithm}   
+
+\subsection{Correctness of \INDCCA KEM}\label{sec:cca-kem-correctness}
+
+For any KEM obtain from the FO transform, a correctness error occurs only on messages that exhibit a decryption error. Therefore, the failure probability $\delta$ of $\FrodoKEM$ is the same as the failure probability of the underlying $\FrodoPKE$ as computed in \autoref{sec:cpa-pke-correctness}.
+
+\subsection{Interconversion to \INDCCA PKE}\label{sec:cca-pke}
+
+\NISTdescription{As the KEM and public-key encryption functionalities can generally be interconverted, unless the submitter specifies otherwise, NIST will apply standard conversion techniques to convert between schemes if necessary.}
+
+$\FrodoKEM$ can be converted to an \INDCCA-secure public-key encryption scheme using standard conversion techniques as specified by NIST.  In particular, shared secret $\ssk$ can be used as the encryption key in an appropriate data encapsulation mechanism in the KEM/DEM (key encapsulation mechanism / data encapsulation mechanism) framework~\cite{CraSho03}.
+
+\subsection{Cryptographic primitives}\label{sec:primitives}
+
+\NISTdescription{A complete submission shall specify any padding mechanisms and any uses of NIST-approved cryptographic primitives that are needed in order to achieve security. If the scheme uses a cryptographic primitive that has not been approved by NIST, the submitter shall provide an explanation for why a NIST-approved primitive would not be suitable.}
+
+In $\FrodoKEM$ we use the following generic cryptographic primitives. We
+describe their security requirements and instantiations with NIST-approved
+cryptographic primitives. In what follows, we use
+$\SHAKE128/256$ to denote the use of either $\SHAKE128$ or $\SHAKE256$;
+which one is used with which parameter set for $\FrodoKEM$ is indicated in \autoref{tab:parameters-all}.
+
+\begin{itemize}
+
+\item $\Frodo.\gen$ in $\FrodoKEM.\KeyGen$: The security requirement on
+  $\Frodo.\gen$ is that it is a public function that generates pseudorandom
+  matrices $\bfA$. $\Frodo.\gen$ is instantiated using either \AESOneTwoEight
+  (as in \autoref{alg:genA_AES}) or $\SHAKE128$ (as in
+  \autoref{alg:genA_SHAKE}).
+
+\item $G_1$, $G_2$, and $F$ in transform $\SFOnotperpprime$: these are
+  modeled as independent random oracles (see below). We instantiate these using $\SHAKE128/256$.
+\end{itemize}
+
+%Overall, $\FrodoKEM$ has the following uses of $\SHAKE$:
+%
+%\begin{enumerate}
+%\item $\Frodo.\gen$	using $\SHAKE128$, line 3: $\SHAKE128(\bfb, \dots)$, input $16+\lengthseedA$ bits
+%\item $\FrodoKEM.\KeyGen$, line 2: $\SHAKE(\bfz, \dots)$, input $\lengthz$ bits
+%\item $\FrodoKEM.\KeyGen$, line 4: $\SHAKE(\mathtt{0x5F}\|\seedSE, \dots)$, input $8+\lengthseedSE$ bits
+%\item $\FrodoKEM.\KeyGen$, line 9: $\SHAKE(\seedA \| \bfb, \dots)$, input $\lengthseedA+D\cdot n \cdot \nbar$ bits
+%\item $\FrodoKEM.\Encaps$, line 2: same as $\FrodoKEM.\KeyGen$, line 9
+%\item $\FrodoKEM.\Encaps$, line 3: $\SHAKE(\pkh\|\mu{\color{black}\|\salt}, \dots)$, input length $\lengthpkhash+\lengthm{\color{black}+\lengthsalt}$ bits
+%\item $\FrodoKEM.\Encaps$, line 4: $\SHAKE(\mathtt{0x96}\|\seedSE, \dots)$, input length $8+\lengthseedSE$ bits
+%\item $\FrodoKEM.\Encaps$, line 15: $\SHAKE(\bfc_1\|\bfc_2{\color{black}\|\salt}\|\bfk, \dots)$, input length $(\mbar\cdot n+\mbar\cdot\nbar)D {\color{black}+\lengthsalt} + \lengthK$ bits
+%\item $\FrodoKEM.\Decaps$, line 6: same as $\FrodoKEM.\Encaps$, line 3
+%\item $\FrodoKEM.\Decaps$, line 7: same as $\FrodoKEM.\Encaps$, line 4
+%\item $\FrodoKEM.\Decaps$, line 17: same as $\FrodoKEM.\Encaps$, line 15
+%\end{enumerate}
+
+\paragraph{Domain separation for $\SHAKE$.}
+Each distinct use of $\SHAKE$ in \FrodoKEM should be cryptographically independent, which is achieved via one of two forms of domain separation.  
+
+$\SHAKE$, and the underlying Keccak operation, employ padding to pad input strings to a multiple of the rate.  The specific padding used is appending the string $\mathtt{10^*1}$.  Thus, inputs of different lengths yield different padded strings.  
+
+For uses of $\SHAKE$ where the inputs are of different lengths, we rely on Keccak's padding for domain separation.
+
+For uses of $\SHAKE$ where the inputs are of the same length (i.e., line 4 in $\FrodoKEM.$ $\KeyGen$ and $\FrodoKEM.\Encaps$, and line 7 in $\FrodoKEM.\Decaps$), we prepend distinct bytes as domain separators.  These domain separators have bit patterns ($\mathtt{0x5F}=\mathtt{01011111}$, $\mathtt{0x96}=\mathtt{10010110}$) that were chosen to make it hard to use individual or consecutive bit flipping attacks to turn one into the other.
+
+\subsection{\FrodoKEM variants}\label{sec:variants}
+
+\FrodoKEM is parameterized by the pseudorandom generator (PRG) that is used for
+the generation of the matrix $\bfA$ in $\Frodo.\gen$. As explained in \autoref{sec:genA}, there are two options:
+using $\AESOneTwoEight$ (\autoref{alg:genA_AES}) and using $\SHAKE128$ (\autoref{alg:genA_SHAKE}).
+
+In addition, \FrodoKEM consists of two main variants: an ``ephemeral'' variant, called \eFrodoKEM,
+that is intended for applications in which the number of ciphertexts produced
+relative to any single public key is fairly small (e.g., less than $2^8$), and a ``salted'' variant, simply called \FrodoKEM, that does
+not impose any restriction on the reuse of key pairs.
+
+In contrast to \eFrodoKEM, the salted KEM \FrodoKEM is constructed by applying the $\SFOnotperpprime$ transform
+and incorporates some changes to address certain multi-ciphertext attacks. 
+Specifically, salted \FrodoKEM doubles the length of the $\seedSE$ value
+and incorporates a public random value $\salt$ into encapsulation (see \autoref{tab:parameters-additional}).
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

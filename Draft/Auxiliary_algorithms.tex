@@ -1,0 +1,339 @@
+\section{Auxiliary algorithms}%
+\label{sec:algs}
+
+This section describes the auxiliary algorithms used in $\FrodoPKE$ and $\FrodoKEM$.
+
+%\lewis{Renaming this section to "Auxiliary algorithms" from "Algorithm description." Previously the beginning of this section read "This section specifies the algorithms comprising the $\FrodoKEM$ key encapsulation mechanism.  $\FrodoKEM$ is built from a public-key encryption scheme, $\FrodoPKE$, as well as several other components." }
+
+\paragraph{Notation.}
+In this work, the algorithms are described in terms of the following parameters:
+\begin{itemize}
+\item $\chi$, a probability distribution on $\bbZ$, and $T_\chi$, the corresponding distribution table for sampling;
+\item $q=2^D$, a power-of-two integer modulus with exponent $D\leq 16$;
+\item $n,\mbar,\nbar$, integer matrix dimensions with $n \equiv 0 \pmod 8$;
+\item $B\leq D$, the number of bits encoded in each matrix entry;
+\item $\ell=B\cdot \mbar\cdot\nbar$, the length of bit strings that are encoded as $\mbar$-by-$\nbar$ matrices;
+\item $\lengthseedA$, the bit length of seeds used for pseudorandom matrix generation;
+\item $\lengthseedSE$, the bit length of seeds used for pseudorandom bit generation for error sampling.
+\end{itemize}
+
+%Additional parameters for specific algorithms accompany the algorithm description.
+
+\subsection{Matrix encoding of bit strings}
+\label{sec:matrix-encoding}
+
+This subsection describes how bit strings are encoded as mod-$q$ integer matrices.
+Recall that $2^B \leq q$. The encoding function $\encode(\cdot)$ encodes an integer $0 \leq k < 2^B$ as an element in $\bbZ_q$ by multiplying it by $q/2^B=2^{D-B}$:
+\[ \encode(k) := k\cdot  q/2^B \enspace . \]
+This encoding function can be found in early works on LWE-based encryption, for example \cite{PKC:KawTanXag07,STOC:PeiWat08,C:PeiVaiWat08}.
+Using this function, the function $\Frodo.\Encode$ encodes bit strings of
+length $\ell=B\cdot \mbar\cdot\nbar$ as  $\mbar$-by-$\nbar$-matrices with
+entries in $\bbZ_q$ by applying $\encode(\cdot)$ to $B$-bit sub-strings sequentially and filling the matrix row by row entry-wise. The function $\Frodo.\Encode$ is shown in \autoref{alg:encode}.
+Each $B$-bit sub-string is interpreted as an integer $0 \leq k < 2^B$ and then encoded by $\encode(k)$, which means that $B$-bit values are placed into the $B$ most significant bits of the corresponding entry modulo $q$.  
+
+The corresponding decoding function $\Frodo.\Decode$ is defined as shown in
+\autoref{alg:decode}. It decodes the $\mbar$-by-$\nbar$ matrix $\bfK$ into a
+bit string of length $\ell=B\cdot\mbar\cdot\nbar$. It extracts $B$ bits from
+each entry by applying the function $\decode(\cdot)$:
+\[ \decode(c) = \round{c \cdot 2^B/q} \bmod 2^B \enspace . \]
+That is, the $\bbZ_{q}$-entry is interpreted as an integer, then
+divided by $q/2^B$ and rounded. This amounts to rounding to the $B$
+most significant bits of each entry. With these definitions, it is the case that $\decode(\encode(k)) = k$ for all $0\leq k < 2^B$.
+
+\begin{figure}[h!]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+\begin{algorithm}[H]
+\caption{\label{alg:encode} $\Frodo.\Encode$}
+% Ananth: I use phantom to make sure that the two Algorithm margins align in
+% the final multicol
+{\bf Input:} Bit string $\bfk\in \{0,1\}^\ell$, $\ell = B\cdot\mbar\cdot\nbar$.\phantom{$\bbZ_q^{\mbar\times\nbar}$}\\
+{\bf Output:} Matrix $\bfK \in \bbZ_q^{\mbar \times \nbar}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \FOR{($i = 0$; $i < \mbar$;  $i\gets i + 1$)}   
+    \FOR{($j = 0$; $j < \nbar$;  $j\gets j+1$)}
+    \STATE $k \gets \sum_{l=0}^{B-1}\bfk_{(i\cdot \nbar + j)B+l}\cdot 2^l$
+    \STATE $\bfK_{i,j} \gets \encode(k)= k\cdot q/2^B$
+    \ENDFOR
+    \ENDFOR
+    \RETURN$\bfK = (\bfK_{i,j})_{0\leq i < \mbar, 0 \leq j < \nbar}$
+\end{algorithmic}
+\end{algorithm}
+\end{minipage}
+~
+\begin{minipage}[t]{0.49\textwidth}
+\begin{algorithm}[H]
+\caption{\label{alg:decode} $\Frodo.\Decode$}
+{\bf Input:} Matrix $\bfK \in \bbZ_q^{\mbar\times\nbar}$.\\
+{\bf Output:} Bit string $\bfk \in \{0,1\}^\ell$, $\ell = B\cdot\mbar\cdot\nbar$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \FOR{($i = 0$; $i < \mbar$;  $i\gets i+1$)}   
+    \FOR{($j = 0$; $j < \nbar$;  $j\gets j+1$)}
+    \STATE $k \gets \decode(\bfK_{i,j})= \round{\bfK_{i,j}\cdot 2^B/q} \bmod 2^B$
+    \STATE $k = \sum_{l=0}^{B-1}k_l \cdot 2^l$ \text{ where } $k_l\in \{0,1\}$
+    \FOR{($l = 0$; $l < B$; $l\gets l+1$)}
+    \STATE $\bfk_{(i\cdot \nbar + j)B+l} \gets k_l$ 
+    \ENDFOR
+    \ENDFOR
+    \ENDFOR
+    \RETURN$\bfk$
+\end{algorithmic}
+\end{algorithm}
+\vspace{-0.5em}
+\textit{Note to implementers: recall $\round{x} = \lfloor x + \frac{1}{2} \rfloor$.}
+\end{minipage}
+\end{figure}
+
+\subsection{Packing matrices modulo $q$}
+\label{sec:pack}
+
+This section specifies packing and unpacking algorithms to transform
+matrices with entries in $\bbZ_q$ to bit strings and vice versa. The
+algorithm $\Frodo.\Pack$ packs a matrix into a bit string by simply
+concatenating the $D$-bit matrix coefficients, as shown in
+\autoref{alg:frodopack}. Note that in the software implementation, the
+resulting bit string is stored as a byte array, padding with zero bits
+to make the length a multiple of~$8$. The reverse operation
+$\Frodo.\Unpack$ is shown in \autoref{alg:frodounpack}.
+
+\begin{figure}[h!]
+\centering
+\begin{minipage}[t]{0.45\textwidth}
+\begin{algorithm}[H]
+\caption{\label{alg:frodopack} $\Frodo.\Pack$}
+{\bf Input:} Matrix $\bfC \in \bbZ_q^{n_1\times n_2}$.\\
+{\bf Output:} Bit string $\bfb \in \{0,1\}^{D\cdot n_1\cdot n_2}$.\phantom{$\bbZ_q^{\mbar\times\nbar}$}\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \FOR{($i = 0$; $i < n_1$;  $i\gets i+1$)}   
+    \FOR{($j = 0$; $j < n_2$;  $j\gets j+1$)}
+    \STATE $\bfC_{i,j} = \sum_{l=0}^{D-1}c_l \cdot 2^l$ \text{ where } $c_l\in \{0,1\}$
+    \FOR{($l = 0$; $l < D$; $l\gets l+1$)}
+    \STATE $\bfb_{(i\cdot n_2  + j)D+l} \gets c_{D-1-l}$ 
+    \ENDFOR
+    \ENDFOR
+    \ENDFOR
+    %\FOR{($i = 0$; $i < D\cdot n_1\cdot n_2/8$;  $i\gets i+1$)}
+    %\STATE $b_\bfC[i] \gets \sum_{l=0}^{7} \bfb_{8i + l} \cdot 2^{7-l}$
+    %\ENDFOR
+    \RETURN $\bfb$
+\end{algorithmic}
+\end{algorithm}
+\end{minipage}
+~
+\begin{minipage}[t]{0.5\textwidth}
+\begin{algorithm}[H]
+\caption{\label{alg:frodounpack} $\Frodo.\Unpack$}
+{\bf Input:}  Bit string $\bfb \in \{0,1\}^{D\cdot n_1\cdot n_2}$, $n_1$, $n_2$.\phantom{$\bbZ_q^{\mbar\times\nbar}$}\\
+{\bf Output:} Matrix $\bfC \in \bbZ_q^{n_1\times n_2}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    %\FOR{($i = 0$; $i < D\cdot n_1\cdot n_2/8$;  $i\gets i+1$)}
+    %\STATE $b_\bfC[i] = \sum_{l=0}^{7} c_l 2^l$, $c_l\in \{0,1\}$
+    %\FOR{($l = 0$; $l < 8$; $l\gets l+1$)}
+    %\STATE $\bfb_{8i+l} \gets c_{7-l}$
+    %\ENDFOR
+    %\ENDFOR
+    \FOR{($i = 0$; $i < n_1$;  $i\gets i+1$)}   
+    \FOR{($j = 0$; $j < n_2$;  $j\gets j+1$)}
+    \STATE $\bfC_{i,j} \gets \sum_{l=0}^{D-1}\bfb_{(i\cdot n_2  + j)D+l}\cdot 2^{D-1-l}$
+    \ENDFOR
+    \ENDFOR
+    \RETURN $\bfC$
+\end{algorithmic}
+\end{algorithm}
+\end{minipage}
+\end{figure}
+
+\subsection{Deterministic random bit generation}\label{sec:rbg}
+
+$\FrodoKEM$ requires the deterministic generation of random bit
+sequences from a random seed value. This is done using the
+SHA-3-derived extendable output function
+$\SHAKE$~\cite{dworkin2015sha}. The function $\SHAKE$ is taken as
+either $\SHAKE128$ or $\SHAKE256$ (indicated below for each
+parameter set of $\FrodoKEM$), and takes as input a bit string $X$ and a
+requested output bit length $L$.
+
+\subsection{Sampling from the error distribution}\label{sec:sampling}
+
+The error distribution~$\chi$ used in $\FrodoKEM$ is a discrete,
+symmetric distribution on $\bbZ$, centered at zero and with small
+support, which approximates a rounded continuous Gaussian
+distribution.
+
+The support of~$\chi$ is
+$S_{\chi}=\set{-s, -s+1, \dots, -1, 0, 1, \dots, s-1, s}$ for a
+positive integer $s$. The probabilities $\chi(z) = \chi(-z)$ for
+$z \in S_{\chi}$ are given by a discrete probability density function,
+which is described by a table
+\[ T_{\chi} = (T_{\chi}(0), T_{\chi}(1), \dots, T_{\chi}(s)) \] of
+$s+1$ positive integers related to the cumulative distribution function.  For a
+certain positive integer $\lengthchi$, the table entries satisfy the
+following conditions:
+\[ T_{\chi}(0) = 2^{\lengthchi-1}\cdot \chi(0)-1 \quad\quad \textrm{and} \quad\quad
+  T_{\chi}(z) = T_{\chi}(0) + 2^{\lengthchi}\sum_{i=1}^z\chi(i) \enspace \textrm{ for
+  } 1 \leq z \leq s. \]
+
+Since the distribution $\chi$ is symmetric and centered at zero, it is easy to verify that
+$T_{\chi}(s) = 2^{\lengthchi-1}-1$.
+
+Sampling from~$\chi$ via inversion sampling is done as shown in
+\autoref{alg:samplechi}.  Given a string of~$\lengthchi$ uniformly
+random bits~$\bfr \in \bit^{\lengthchi}$ and a distribution table
+$T_{\chi}$, the algorithm $\Frodo.\Samp$ returns a sample~$e$ from the
+distribution $\chi$. (Note that $T_\chi(s)$ is never accessed.)
+We emphasize that it is important to perform
+this sampling in constant time to avoid exposing timing side-channels,
+which is why Step~\ref{alg:sample:loop} of the algorithm does a complete loop through the
+entire table~$T_{\chi}$. The comparison in Step~\ref{alg:sample:cmp} needs
+to be implemented in a constant-time manner.
+
+\begin{algorithm}[H]
+\caption{\label{alg:samplechi} $\Frodo.\Samp$}
+{\bf Input:} A (random) bit string $\bfr = (\bfr_0, \bfr_1, \dots,
+\bfr_{\lengthchi-1}) \in \bit^{\lengthchi}$, the table $T_{\chi} = (T_{\chi}(0), T_{\chi}(1), \dots, T_{\chi}(s))$.\\
+{\bf Output:} A sample $e \in \bbZ$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE $t \gets \sum_{i=1}^{\lengthchi-1} \bfr_i\cdot 2^{i-1}$
+    \STATE $e\gets 0$
+    \FOR{($z = 0$; $z < s$;  $z\gets z+1$)}\label{alg:sample:loop}
+    \IF{$t > T_\chi(z)$}\label{alg:sample:cmp}
+    \STATE $e\gets e+1$
+    \ENDIF
+    \ENDFOR
+    \STATE $e\gets (-1)^{\bfr_0}\cdot e$
+    \RETURN$e$
+\end{algorithmic}
+\end{algorithm}
+
+An $n_1$-by-$n_2$ matrix of~$n_1n_2$ samples from the error
+distribution is sampled on input of a 
+$(n_1n_2 \cdot \lengthchi)$-bit string, here written as a sequence 
+$(\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(n_1n_2-1)})$ of
+$n_1n_2$ bit vectors of length
+$\lengthchi$ each,
+by sampling~$n_1n_2$ error terms through calls to $\Frodo.\Samp$ on a
+corresponding $\lengthchi$-bit substring~$\bfr^{(i\cdot n_2 + j)}$ and
+the distribution table $T_\chi$ to sample the matrix entry
+$\bfE_{i,j}$. The algorithm $\Frodo.\SampV$ is shown in
+\autoref{alg:samplevecchi}.
+
+\begin{algorithm}[H]
+\caption{\label{alg:samplevecchi} $\Frodo.\SampV$}
+{\bf Input:} A (random) bit string $(\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(n_1n_2-1)}) \in \{0,1\}^{n_1n_2 \cdot \lengthchi}$ (here, each $\bfr^{(i)}$ is a vector of $\lengthchi$ bits), the
+  table $T_{\chi}$.\\
+  % = (T_{\chi}(0), T_{\chi}(1), \dots, T_{\chi}(s))$
+{\bf Output:} A sample $\bfE \in \bbZ^{n_1\times n_2}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \FOR{($i = 0$; $i < n_1$;  $i\gets i+1$)}
+    \FOR{($j = 0$; $j < n_2$;  $j\gets j+1$)}
+    \STATE $\bfE_{i,j} \gets \Frodo.\Samp(\bfr^{(i\cdot n_2 + j)}, T_\chi)$
+    \ENDFOR
+    \ENDFOR
+    \RETURN$\bfE$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Pseudorandom matrix generation}
+\label{sec:genA}
+
+The algorithm $\Frodo.\gen$ takes as input a seed
+$\seedA\in\{0,1\}^\lengthseedA$ and an implicit dimension $n\in\bbZ$, and outputs
+a pseudorandom matrix $\bfA\in \bbZ_q^{n\times n}$. There are two
+options for instantiating $\Frodo.\gen$. The first one uses
+$\AESOneTwoEight$ and is shown in \autoref{alg:genA_AES}; the second
+uses $\SHAKE128$ and is shown in \autoref{alg:genA_SHAKE}.
+
+\paragraph{Using $\AESOneTwoEight$.}
+
+\autoref{alg:genA_AES} generates a matrix
+$\bfA \in \bbZ_{q}^{n\times n}$ as follows.  For each row
+index $i=0,1,\ldots,n-1$ and column index $j=0,8,\ldots,n-8$, the
+algorithm generates a 128-bit block, which it uses to set the matrix
+entries $\bfA_{i,j}, \bfA_{i,j+1}, \ldots, \bfA_{i,j+7}$ as follows.  It
+applies $\AESOneTwoEight$ with key $\seedA$ to the input block
+$\inner{i} \| \inner{j} \| 0 \cdots 0 \in \bit^{128}$, where $i,j$ are
+encoded as 16-bit strings, represented in little-endian byte order. It then splits the 128-bit AES output block
+into eight 16-bit strings, which it interprets as nonnegative
+integers~$c_{i,j+k}$ for $k=0,1,\ldots,7$ in little-endian byte order.  Finally, it sets
+$\bfA_{i,j+k}= c_{i,j+k} \bmod q$ for all~$k$.
+
+\paragraph{Using $\SHAKE128$.}
+
+\autoref{alg:genA_SHAKE} generates a matrix
+$\bfA \in \bbZ_{q}^{n \times n}$ as follows. For each row index
+$i=0,1,\ldots,n-1$, it calls $\SHAKE128$ with a main input
+of~$\seedA$, prefixed with a counter (represented as a 16-bit integer in little-endian byte order), to produce a
+$16n$-bit output string. It splits this output into 16-bit integers (in little-endian byte order)
+$c_{i,j}$ for $j=0,1,\ldots, n-1$, and sets
+$\bfA_{i,j} = c_{i,j} \bmod q$ for all~$j$.
+
+\begin{algorithm}[]
+\caption{\label{alg:genA_AES} $\Frodo.\gen$ using $\AESOneTwoEight$}
+{\bf Input:} Seed $\seedA \in \{0,1\}^\lengthseedA$.\\
+{\bf Output:} Matrix $\bfA \in \bbZ_q^{n\times n}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \FOR{($i = 0$; $i < n$;  $i\gets i+1$)}
+    \FOR{($j = 0$; $j < n$;  $j\gets j+8$)}
+    \STATE $\bfb \gets \inner{i} \| \inner{j} \|0 \cdots 0 \in
+    \bit^{128}$ where $\inner{i}, \inner{j} \in \bit^{16}$
+    \STATE $\inner{c_{i,j}} \| \inner{c_{i,j+1}} \| \cdots \| \inner{c_{i,j+7}} \gets
+    \AESOneTwoEight_{\seedA}(\bfb)$ where each $\inner{c_{i,k}} \in \bit^{16}$
+    \FOR{($k=0$; $k<8$; $k\gets k+1$)}
+    \STATE $\bfA_{i,j+k} \gets c_{i,j+k} \bmod q$
+    \ENDFOR
+    \ENDFOR
+    \ENDFOR
+    \RETURN $\bfA$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[]
+\caption{\label{alg:genA_SHAKE} $\Frodo.\gen$ using $\SHAKE128$}
+{\bf Input:} Seed $\seedA \in \{0,1\}^\lengthseedA$.\\
+{\bf Output:} Pseudorandom matrix $\bfA \in \bbZ_q^{n\times n}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \FOR{($i = 0$; $i < n$;  $i\gets i+1$)}
+    \STATE $\bfb \gets \inner{i} \| \seedA \in
+    \bit^{16+\lengthseedA}$ where $\inner{i} \in \bit^{16}$
+    \STATE $\inner{c_{i,0}} \| \inner{c_{i,1}} \| \cdots \|
+    \inner{c_{i,n-1}} \gets \SHAKE128(\bfb, 16n)$
+    where each $\inner{c_{i,j}} \in \bit^{16}$
+    \FOR{($j = 0$; $j < n$;  $j\gets j+1$)}
+    \STATE $\bfA_{i,j} \gets c_{i,j} \bmod q$
+    \ENDFOR
+    \ENDFOR
+    \RETURN$\bfA$
+\end{algorithmic}
+\end{algorithm}
+
+
+%\paragraph{Using other functions.}
+%In principle, other functions could be used to pseudorandomly generate the matrix $\bfA$, such as a lightweight stream cipher for platforms without the hardware instructions that make fast $\AES$ and $\SHAKE$ implementations possible.  As NIST currently does not standardize such a primitive, and the call for proposals indicated that submissions should use NIST primitives, we do not currently propose such an alternate instantiation.
+
+
+
+
+
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

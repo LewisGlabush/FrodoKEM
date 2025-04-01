@@ -1,0 +1,341 @@
+\section{Parameters}%
+\label{sec:params}
+
+\ifshoworiginal
+This section outlines our methodology for choosing tunable parameters of the proposed algorithms. 
+
+\subsection{High-level overview}
+
+Recall the main $\FrodoPKE$ parameters defined in
+\autoref{sec:algs}:
+\begin{itemize}
+  \item $\chi$, a probability distribution on $\bbZ$;
+  \item $q=2^D$, a power-of-two integer modulus with exponent $D \leq 16$;
+  \item $n,\mbar,\nbar$, integer matrix dimensions with $n \equiv 0 \pmod 8$;
+  \item $B\leq D$, the number of bits encoded in each matrix entry;
+  \item $\ell=B\cdot \mbar\cdot\nbar$ the length of bit strings to be encoded in an $\mbar$-by-$\nbar$ matrix.
+\end{itemize}
+
+The task of parameter selection is framed as a combinatorial
+optimization problem, where the objective function is the ciphertext's
+size, and the constraints are dictated by the target security level,
+probability of decryption failure, and computational efficiency. The
+optimization problem is solved by sweeping the parameter space,
+subject to simple pruning techniques.  We perform this sweep of the
+parameter space using the Python scripts that accompany the
+submission, in the folder
+\texttt{Additional\_Implementations/Parameter\_Search\_Scripts}.
+
+\else
+
+Recall the \FrodoPKE parameters defined in \autoref{sec:algs}.
+The task of parameter selection is framed as a combinatorial
+optimization problem, where the objective function is the ciphertext's
+size, and the constraints are dictated by the target security level,
+probability of decryption failure, and computational efficiency. The
+optimization problem is solved by sweeping the parameter space,
+subject to simple pruning techniques.  We perform this sweep of the
+parameter space using the Python scripts that accompany the
+submission (folder \texttt{Parameter\_Search\_Scripts}):
+\url{https://doi.org/10.5281/zenodo.14633189}.
+\fi
+
+\subsection{Parameter constraints}\label{sec:constraints}
+
+Implementation considerations limit $q$ to be at most $2^{16}$ and $n$
+to be a multiple of 16. Our cost function is the sum of the bit lengths of
+$\FrodoPKE$'s ciphertext and its public key, which is $D\cdot (n\cdot (\mbar\ + \nbar)+\mbar\ \nbar)+\lengthseedA$.
+
+The standard deviation~$\sigma$ of the Gaussian error distribution is
+taken to exceed the ``smoothing parameter'' of the
+integers~$\mathbb{Z}$, for a very small error parameter $\eps >
+0$. The specific values of~$\sigma$ are chosen following the
+methodology in \autoref{sec:strength:lattice}, which demonstrates that
+our choices conform to a nontrivial reduction from the worst-case
+\BDDwDGS problem to the corresponding average-case LWE decision
+problem.
+
+The complexity of the error-sampling algorithm
+(\autoref{sec:sampling}) depends on the support of the distribution
+and the number of uniformly random bits per sample. We bound the
+number of bits per sample by 16. Since the distribution is symmetric,
+the sample's sign ($\bfr_0$ in \autoref{alg:samplechi}) can be chosen
+independently from its magnitude~$e$, which leaves 15 bits for
+sampling from the non-negative part of the support. For each setting
+of the variance $\sigma^2$ we find a discrete distribution subject to
+the above constraints that minimizes its \renyi divergence (for
+several integral orders) from the target ``ideal'' distribution, which
+is the rounded Gaussian~$\Psi_{\sigma \sqrt{2\pi}}$.
+
+We estimate the concrete security of parameters for our scheme based
+on cryptanalytic attacks (\autoref{sec:attack:cryptanalytic}),
+accounting for the loss due to substitution of a rounded Gaussian with
+its discrete approximation (\autoref{sec:renyi_loss}).  The
+probability of decryption failure is computed according to the
+procedure outlined in \autoref{sec:cpa-pke}.
+
+In case of ties, i.e., when different parameter sets result in
+identical ciphertext sizes (i.e., the same $q$ and~$n$), we chose the
+smaller~$\sigma$ for \FrodoKEMLOne and \FrodoKEMLFive (minimizing the probability of
+decryption failure), and the larger~$\sigma$ for \FrodoKEMLThree
+(prioritizing security).
+
+\subsection{Selected parameter sets}\label{sec:params:sets}
+
+We present three core parameter sets for \FrodoKEM:
+\begin{itemize}
+\item \FrodoLOne, matching or exceeding the brute-force security of $\AESOneTwoEight$,
+\item \FrodoLThree, matching or exceeding the brute-force security of $\AESOneNineTwo$, and
+\item \FrodoLFive, matching or exceeding the brute-force security of $\AESTwoFiveSix$,
+\end{itemize}
+\noindent which target Levels 1, 3 and 5, respectively,
+in the NIST call for proposals~\cite{NIST17}.
+
+We parameterize each core set by the PRG that is used for the generation
+of matrix $\bfA$. 
+As described in~\autoref{sec:genA}, \FrodoKEM allows two options for the PRG:
+$\AESOneTwoEight$ and $\SHAKE128$. 
+In addition, \FrodoKEM consists of two main variants: a \emph{salted} variant simply
+called \FrodoKEM that does not impose any restriction on the reuse of key pairs,
+and an \emph{ephemeral} variant called \eFrodoKEM that is intended for applications
+in which the number of ciphertexts produced relative to any single public key is small (see \autoref{sec:variants}).
+%More specifically, to address certain multi-ciphertext attacks, \eFrodoKEM doubles
+%the length of the $\seedSE$ value, and incorporates a public random salt value into encapsulation.
+
+Thus, in total, we propose twelve parameter sets. The variant \FrodoKEM includes the
+parameter sets \FrodoKEMLOneAES, \FrodoKEMLThreeAES, \FrodoKEMLFiveAES,
+\FrodoKEMLOneSHAKE, \FrodoKEMLThreeSHAKE and \FrodoKEMLFiveSHAKE, and the variant \eFrodoKEM
+includes the parameter sets \eFrodoKEMLOneAES, \eFrodoKEMLThreeAES, \eFrodoKEMLFiveAES,
+\eFrodoKEMLOneSHAKE, \eFrodoKEMLThreeSHAKE and \eFrodoKEMLFiveSHAKE.
+
+\autoref{tab:parameters-all} and \autoref{tab:parameters-additional} summarize
+the cryptographic parameters for all the parameter sets.
+The corresponding error distributions appear in \autoref{tab:distribution}.
+\autoref{tab:security} summarizes security claims we can make about \FrodoKEM
+and its components. The columns LWE security C, Q and P respectively denote
+security, in bits, for classical, quantum, and plausible attacks on $\mbar+\nbar$
+instances of the normal-form (decisional) LWE problem with Gaussian error
+distribution (\autoref{sec:lwe}) as estimated by the methodology of
+\autoref{sec:attack:cryptanalytic}. The column IND-CCA security C denotes $\INDCCA$
+security, in bits, for classical random oracle model attacks according to
+\autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}.
+
+\begin{table}[h]
+\caption{Cryptographic parameters for $\FrodoKEMLOne$, $\FrodoKEMLThree$, $\FrodoKEMLFive$, and
+their corresponding ephemeral variants.
+For each set, $\lengthm = \lengths = \lengthK = \lengthpkhash = \lengthss = \ell$.}\label{tab:parameters-all}
+\begin{center}
+\begin{tabular}{l|r|r|r }
+\toprule
+& $(\styleScheme{e})\FrodoKEMLOne$ & $(\styleScheme{e})\FrodoKEMLThree$ & $(\styleScheme{e})\FrodoKEMLFive$ \\
+\midrule
+$D$ & $15$ & $16$ & $16$ \\
+$q$ & $32768$ & $65536$ & $65536$ \\
+$n$ & $640$ & $976$ & $1344$ \\
+$\mbar=\nbar$ & $8$ & $8$ & $8$ \\
+$B$ & $2$ & $3$ & $4$ \\
+$\lengthseedA$ & $128$ & $128$ & $128$ \\
+$\lengthz$ & $128$ & $128$ & $128$ \\
+$\ell$ & $128$ & $192$ & $256$ \\
+$\lengthchi$ & $16$ & $16$ & $16$ \\
+$\chi$ & $\chi_\FrodoLOne$ & $\chi_\FrodoLThree$ & $\chi_\FrodoLFive$ \\
+$\SHAKE$ & $\SHAKE128$ & $\SHAKE256$ & $\SHAKE256$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+\caption{Size (in bits) of $\lengthseedSE$ and $\lengthsalt$.}\label{tab:parameters-additional}
+\begin{center}
+\begin{tabular}{l|r|r|r }
+\toprule
+& $\FrodoKEMLOne$ & $\FrodoKEMLThree$ & $\FrodoKEMLFive$ \\
+\midrule
+$\lengthseedSE$ & $256$ & $384$ & $512$ \\
+$\lengthsalt$ & $256$ & $384$ & $512$ \\
+\toprule
+& $\eFrodoKEMLOne$ & $\eFrodoKEMLThree$ & $\eFrodoKEMLFive$ \\
+\midrule
+$\lengthseedSE$ & $128$ & $192$ & $256$ \\
+$\lengthsalt$ & $0$ & $0$ & $0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\ifshoworiginal
+The procedures outlined in this section can be adapted to support
+alternative cost functions and constraints. For instance, an objective
+function that takes into account computational costs or penalizes the
+public key size would lead to a different set of outcomes. For
+example, constraints can be also chosen to guarantee error-free
+decryption, or to select parameters that allow for a bounded number of
+homomorphic operations.
+
+The three parameter sets are given in \autoref{tab:parameters}.  The
+corresponding error distributions appear in
+\autoref{tab:distribution}. \autoref{tab:security} summarizes security claims we can make about \FrodoKEM and its components. The columns LWE security C, Q and P respectively
+denote security, in bits, for classical, quantum, and plausible attacks on $\mbar+\nbar$ instances of the normal-form (decisional) LWE problem with Gaussian error distribution (\autoref{sec:lwe}) as estimated by the methodology of \autoref{sec:attack:cryptanalytic}. The column $\indcca$ security C denotes $\indcca$ security, in bits, for classical random oracle model attacks according to \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}.
+
+\begin{table}[h]
+	\caption{\textbf{Parameters at a glance}}\label{tab:parameters}
+	\begin{center}
+		\begin{tabular}{l | c c c c c c c}
+			\toprule
+			& $n$ & $q$& $\sigma$ & \textbf{support} & $B$ & $\bar{m}\times \bar{n}$ & $c$ \textbf{size} \\
+			& & & & \textbf{of} $\chi$ & & & \textbf{(bytes)}\\
+			\midrule
+			\FrodoLOne & \!\! 640 \!\! & \!\! $2^{15}$ \!\! &2.8 &$[-12\dots 12]$ &\!\!2\!\! & $8\times 8$ & \hphantom{0}9,720 \\
+			\FrodoLThree & \!\! 976 \!\! & \!\! $2^{16}$ \!\! &2.3 &$[-10\dots 10]$ &\!\!3\!\! & $8\times 8$ & 15,744 \\
+			\FrodoLFive & \!\! 1344 \!\! & \!\! $2^{16}$ \!\! &1.4 &$[-6\dots 6]$ &\!\!4\!\! & $8\times 8$ & 21,632 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+\fi
+
+\begin{table}[h]
+\caption{Error distributions.}\label{tab:distribution}
+\begin{center}
+\scalebox{0.78}{
+\begin{tabular}{l|c| r r r r r r r r r r r r r|c c}
+\toprule
+ & $\sigma$ & \multicolumn{13}{c|}{\textbf{Probability of (in multiples of $2^{-16}$)}} & \multicolumn{2}{c}{\textbf{\renyi}} \\
+             & & 0 &\!\!$\pm 1$\!\!&\!\!$\pm 2$\!\!&\!\!$\pm 3$\!\!&\!\!$\pm 4$\!\!&\!\!$\pm 5$&\!\!$\pm 6$\!\!&\!\!$\pm 7$\!\!&\!\!$\pm 8$\!\!&\!\!$\pm 9$\!\!&\!\!$\pm 10$\!\!&\!\!$\pm 11$\!\!&\!\!$\pm 12$\!\!& \textbf{order} & \textbf{divergence} 
+\\ \midrule
+$\chi_\FrodoLOne$ & 2.8 &\!\!9288\!\!&\!\!8720\!\!&\!\!7216\!\!&\!\!5264\!\!&\!\!3384\!\!&\!\!1918\!\!&\!\!958\!\!&\!\!422\!\!&\!\!164\!\!&\!\!56\!\!&\!\!17\!\!&\!\!4\!\!&\!\!1\!\!& 200 & $0.324\times 10^{-4}$ \\
+$\chi_\FrodoLThree$ & 2.3 &\!\!11278\!\!&\!\!10277\!\!&\!\!7774\!\!&\!\!4882\!\!&\!\!2545\!\!&\!\!1101\!\!&\!\!396\!\!&\!\!118\!\!&\!\!29\!\!&\!\!6\!\!&\!\!1\!\!&&& 500 & $0.140\times 10^{-4}$ \\
+$\chi_\FrodoLFive$ & 1.4 &\!\!18286\!\!&\!\!14320\!\!&\!\!6876\!\!&\!\!2023\!\!&\!\!364\!\!&\!\!40\!\!&\!\!2\!\!&&&&&&& 1000 & $0.264\times 10^{-4}$ \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+\end{table}
+
+\begin{table}[h]
+	\caption{Security bounds.}\label{tab:security}
+	\begin{center}
+		\begin{tabular}{l | c c | c  c  c | c }
+			\toprule
+			& \textbf{target level} & \textbf{failure rate} & \multicolumn{3}{c}{\textbf{LWE security}} & \textbf{IND-CCA security}\\
+			& &  & \textbf{C} & \textbf{Q} & \textbf{P} & \textbf{C} \\
+			\midrule
+				\FrodoLOne & 1 & $2^{-138.7}$ & 145 & 132 & 104 & 141 \\
+				\FrodoLThree & 3 & $2^{-199.6}$ & 210 & 191 & 150 & 206 \\
+				\FrodoLFive & 5 & $2^{-252.5}$ & 275 & 250 & 197 & 268 \\		
+			\bottomrule
+		\end{tabular}
+	\end{center}
+\end{table}
+
+
+\ifshoworiginal
+\subsection{Summary of parameters}
+
+\autoref{tab:parameters-all} summarizes all cryptographic parameters for $\FrodoLOne$, $\FrodoLThree$ and $\FrodoLFive$.  $\FrodoKEMLOneAES$, $\FrodoKEMLThreeAES$ and $\FrodoKEMLFiveAES$ use $\AESOneTwoEight$ for generation of $\bfA$; $\FrodoKEMLOneSHAKE$, $\FrodoKEMLThreeSHAKE$ and $\FrodoKEMLFiveSHAKE$ 
+use $\SHAKE$ for generation of $\bfA$.
+
+\begin{table}[h]
+\caption{\textbf{Cryptographic parameters for $\FrodoLOne$, $\FrodoLThree$, and $\FrodoLFive$}}\label{tab:parameters-all}
+\begin{center}
+\begin{tabular}{l|r|r|r }
+\toprule
+& $\FrodoLOne$ & $\FrodoLThree$ & $\FrodoLFive$ \\
+\midrule
+$D$ & $15$ & $16$ & $16$ \\
+$q$ & $32768$ & $65536$ & $65536$ \\
+$n$ & $640$ & $976$ & $1344$ \\
+$\mbar=\nbar$ & $8$ & $8$ & $8$ \\
+$B$ & $2$ & $3$ & $4$ \\
+$\lengthseedA$ & $128$ & $128$ & $128$ \\
+$\lengthz$ & $128$ & $128$ & $128$ \\
+$\lengthm = \ell$ & $128$ & $192$ & $256$ \\
+$\lengthseedSE$ & $128$ & $192$ & $256$ \\
+$\lengths$ & $128$ & $192$ & $256$ \\
+$\lengthK$ & $128$ & $192$ & $256$ \\
+$\lengthpkhash$ & $128$ & $192$ & $256$ \\
+$\lengthss$ & $128$ & $192$ & $256$ \\
+$\lengthchi$ & $16$ & $16$ & $16$ \\
+$\chi$ & $\chi_\FrodoLOne$ & $\chi_\FrodoLThree$ & $\chi_\FrodoLFive$ \\
+$\SHAKE$ & $\SHAKE128$ & $\SHAKE256$ & $\SHAKE256$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\autoref{tab:size} summarizes the sizes, in bytes, of the different
+inputs and outputs required by
+$\FrodoKEM$. % and, for comparison, $\FrodoPKE$. The discrepancy between space complexity of the two schemes is due to the transform detailed in~\autoref{sec:spec:algs:cca-transform}.
+Note that we also include the size of the public key in the secret key
+sizes, in order to comply with NIST's API guidelines.  Specifically,
+since NIST's decapsulation API does not include an input for the
+public key, it needs to be included as part of the secret key.
+
+
+\begin{table}[!ht]
+\caption{\textbf{Size (in bytes) of inputs and outputs of $\FrodoKEM$.} 
+Secret key size is the sum of the sizes of the actual secret value and of the public key (the NIST API does not include the public key as explicit input to decapsulation).} \label{tab:size}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.3cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c c c c}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}} & \textbf{secret key} & \textbf{public key} & \textbf{ciphertext} & \textbf{shared secret} \\
+                                 & $\sk$                & $\pk$                & $c$                 & $\ssk$                 \\
+\midrule
+\FrodoKEMLOne & 19,888 & \hphantom{0}9,616 & \hphantom{0}9,720 & 16 \\ 
+& {\scriptsize (10,272 + 9,616)}\\
+\FrodoKEMLThree & 31,296 & 15,632 & 15,744 & 24 \\ 
+& {\scriptsize (15,664 + 15,632)}\\
+\FrodoKEMLFive & 43,088 & 21,520 & 21,632 & 32 \\ 
+&{\scriptsize (21,568 + 21,520)}\\
+\bottomrule
+\end{tabular}
+\end{table} 
+
+\subsection{Provenance of constants and tables}\label{sec:constants}
+
+\NISTdescription{To help rule out the existence of possible back-doors in an algorithm, the submitter shall explain the provenance of any constants or tables used in the algorithm.}
+
+Constants used as domain separators in calls to $\SHAKE$ are described in Section~\ref{sec:spec:primitives}.
+
+The constants in \autoref{tab:parameters} and \autoref{tab:distribution} were generated by search scripts following the methodology described in \autoref{sec:spec:params}.
+\fi
+
+\autoref{tab:size} summarizes the sizes, in bytes, of the different
+inputs and outputs required by \FrodoKEM.
+Note that the secret key sizes include the size of the public key,
+in order to comply with NIST's API guidelines. Specifically,
+since NIST's decapsulation API does not include an input for the
+public key, it needs to be included as part of the secret key.
+
+
+\begin{table}[!ht]
+\caption{Size (in bytes) of inputs and outputs of \FrodoKEM and \eFrodoKEM.} \label{tab:size}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.3cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c c c c}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}} & \textbf{secret key} & \textbf{public key} & \textbf{ciphertext} & \textbf{shared secret} \\
+                                 & $\sk$                & $\pk$                & $c$                 & $\ssk$               \\
+\midrule
+\FrodoKEMLOne & 19,888 & \hphantom{0}9,616 & \hphantom{0}9,752 & 16 \\
+\FrodoKEMLThree & 31,296 & 15,632 & 15,792 & 24 \\ 
+\FrodoKEMLFive & 43,088 & 21,520 & 21,696 & 32 \\ 
+\midrule
+\eFrodoKEMLOne & 19,888 & 9,616 & 9,720 & 16 \\
+\eFrodoKEMLThree & 31,296 & 15,632 & 15,744 & 24 \\ 
+\eFrodoKEMLFive & 43,088 & 21,520 & 21,632 & 32 \\ 
+\bottomrule
+\end{tabular}
+\end{table} 
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

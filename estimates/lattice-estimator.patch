@@ -1,0 +1,144 @@
+diff --git a/estimator/lwe.py b/estimator/lwe.py
+index ba47ce0..9d99439 100644
+--- a/estimator/lwe.py
++++ b/estimator/lwe.py
+@@ -11,6 +11,7 @@ from .lwe_bkw import coded_bkw
+ from .lwe_guess import exhaustive_search, mitm, distinguish, guess_composition  # noqa
+ from .lwe_dual import dual
+ from .lwe_dual import matzov as dual_hybrid
++# from .lwe_dual import dual_hybrid
+ from .gb import arora_gb  # noqa
+ from .lwe_parameters import LWEParameters as Parameters  # noqa
+ from .conf import (
+@@ -95,6 +96,7 @@ class Estimate:
+         add_list=tuple(),
+         jobs=1,
+         catch_exceptions=True,
++        verbose=True
+     ):
+         """
+         Run all estimates, based on the default cost and shape models for lattice reduction.
+@@ -175,7 +177,8 @@ class Estimate:
+                 continue
+             if algorithm == "dual_mitm_hybrid" and res["dual_hybrid"]["rop"] < result["rop"]:
+                 continue
+-            print(f"{algorithm:20s} :: {result!r}")
++            if verbose:
++                print(f"{algorithm:20s} :: {result!r}")
+ 
+         return res
+ 
+diff --git a/estimator/lwe_dual.py b/estimator/lwe_dual.py
+index 3e75150..0992d31 100644
+--- a/estimator/lwe_dual.py
++++ b/estimator/lwe_dual.py
+@@ -414,6 +414,7 @@ class DualHybrid:
+             rop: ≈2^149.8, mem: ≈2^92.1, m: 510, t: 76, β: 399, d: 1000, ↻: 1, ζ: 22, tag: dual_hybrid
+ 
+         """
++        print("!!! \"DualHybrid\" !!!")
+ 
+         Cost.register_impermanent(
+             rop=True,
+@@ -650,6 +651,7 @@ class MATZOV:
+         - ``d``: Lattice dimension.
+ 
+         """
++        print("!!!!!!! MATZOV !!!!!!!")
+         params = params.normalize()
+ 
+         for p in early_abort_range(2, params.q):
+@@ -771,6 +773,8 @@ def dual_hybrid(
+     - ``t``: Number of secrets to guess mod 2 (only if ``fft`` is ``True``)
+     """
+ 
++    print("!!! [INDOCRYPT:EspJouKha20] !!!")
++
+     if mitm_optimization is True:
+         mitm_optimization = mitm_opt_default
+ 
+diff --git a/estimator/reduction.py b/estimator/reduction.py
+index 929cc4e..a31d77d 100644
+--- a/estimator/reduction.py
++++ b/estimator/reduction.py
+@@ -775,12 +775,14 @@ class Kyber(ReductionCost):
+         # be called only once per dimension during progressive sieving, for a cost of C · 2^137.4
+         # gates^8." [Kyber20]_
+ 
++        print(f"est..{self.__name__}")
++
+         gate_count = C * 2 ** (
+             RR(self.NN_AGPS[self.nn]["a"]) * beta_ + RR(self.NN_AGPS[self.nn]["b"])
+         )
+         return self.LLL(d, B=B) + svp_calls * gate_count
+ 
+-    def short_vectors(self, beta, d, N=None, B=None, preprocess=True):
++    def short_vectors(self, beta, d, N=None, B=None, preprocess=True, sieve_dim=None):
+         """
+         Cost of outputting many somewhat short vectors using BKZ-β.
+ 
+@@ -815,11 +817,13 @@ class Kyber(ReductionCost):
+         """
+         beta_ = beta - floor(self.d4f(beta))
+ 
++        assert sieve_dim in [None, beta_]
++
+         if N == 1:
+             if preprocess:
+-                return 1.0, self(beta, d, B=B), beta, 1
++                return 1.0, self(beta, d, B=B), 1, beta_
+             else:
+-                return 1.0, 1, beta, 1
++                return 1.0, 1, 1, beta_
+         elif N is None:
+             N = floor(2 ** (0.2075 * beta_))  # pick something
+ 
+diff --git a/estimator/simulator.py b/estimator/simulator.py
+index cea8629..33d4a28 100644
+--- a/estimator/simulator.py
++++ b/estimator/simulator.py
+@@ -36,6 +36,8 @@ def qary_simulator(f, d, n, q, beta, xi=1, tau=1, dual=False, ignore_qary=False)
+ 
+     """
+ 
++    assert 2 <= beta <= d
++
+     if not tau:
+         r = [q**2] * (d - n) + [xi**2] * n
+     else:
+@@ -72,6 +74,8 @@ def CN11(d, n, q, beta, xi=1, tau=1, dual=False, ignore_qary=False):
+ 
+     """
+ 
++    assert 2 <= beta <= d
++
+     from fpylll import BKZ
+     from fpylll.tools.bkz_simulator import simulate
+ 
+@@ -101,6 +105,8 @@ def GSA(d, n, q, beta, xi=1, tau=1, dual=False):
+     """
+     from .reduction import delta as deltaf
+ 
++    assert 2 <= beta <= d
++
+     if not tau:
+         log_vol = RR(log(q, 2) * (d - n) + log(xi, 2) * n)
+     else:
+@@ -173,6 +179,8 @@ def ZGSA(d, n, q, beta, xi=1, tau=1, dual=False):
+         1473.630905870442
+     """
+ 
++    assert 2 <= beta <= d
++
+     @cached_function
+     def ball_log_vol(n):
+         return RR((n/2.) * log(pi) - lgamma(n/2. + 1))
+@@ -285,6 +293,8 @@ def LGSA(d, n, q, beta, xi=1, tau=1, dual=False):
+     """
+     from .reduction import delta as deltaf
+ 
++    assert 2 <= beta <= d
++
+     if not tau:
+         log_vol = RR((d - n)*log(q, 2) + n*log(xi, 2))
+         r_log = d*[RR(log(xi, 2))]

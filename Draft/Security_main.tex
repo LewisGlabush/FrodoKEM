@@ -1,0 +1,157 @@
+\section{Justification of security strength}%
+\label{sec:strength:justification}
+
+The security of $\FrodoKEM$ is supported both by security reductions
+and by analysis of the best known cryptanalytic attacks.
+A full overview of the reductions supporting \FrodoKEM's security is given in \autoref{sec:Security_appendix},
+while the analysis of the best known cryptanalytic attacks can be found in \autoref{sec:attack:cryptanalytic}.
+A summary of the bit-security estimates based on these two methodologies is shown in \autoref{tab:security}.
+
+In this section, we provide the main theorems supporting the security of \FrodoKEM
+in the ROM and QROM. Refer to \autoref{sec:Security_appendix} for complete details.
+
+%\subsection{Security results}
+\subsection{\MINDCCA security in the random oracle model}
+\label{sec:strength:cca-kem} \label{sec:renyi_loss}
+
+The following theorem says that the transformation $\SFOnotperpprime$, which we use to construct \FrodoKEM from \FrodoPKE, generically yields an \MINDCCA-secure KEM (in the classical random oracle model) from an \MINDCPA-secure public-key encryption scheme, even if the KEM and PKE are parameterized by different distributions, provided that those distributions are sufficiently close in terms of \renyi divergence.
+We present multi-challenge security bounds, parameterized by the number of challenge ciphertexts~$n$, and the number of users~$u$.
+A detailed description of the proof steps is given in \autoref{sec:rom-mindcca}.
+
+To specialize this result to obtain an ordinary (single-key, single-ciphertext) $\INDCCA$ security bound, one merely sets $|\saltlist| = n = u = 1$.
+In this case, the final additive term in the security bound from~\eqref{eq:cca-to-cpa-renyi-bound} is zero, and the overall bound matches what was obtained in~\cite{NISTPQC-R3:FrodoKEM20}.
+
+% \begin{remark}
+% In addition, the term $n^2/|\MsgSp|2^{\lengthsalt}$ term represents the probability of a collision in the challenge ciphertexts, and can be removed when we only have 1 challenge. Although, for $n = 1$ this term is negligible.
+    
+% \end{remark}
+
+% \cpnote{I don't see such a term, but I do see one that also has a $\abs{\MsgSp}$ factor in the denominator.
+%   I wonder if this term actually has a numerator of $n(n-1)$, in which case we do not have to say that it can be removed (because $n-1=0$).
+%   It is kind of cheating to say that it can be removed, because that's not a specialization of this theorem, so it requires a justification (which we haven't provided).}
+
+\iffalse (Lewis and Chris:) removing this rushed remark but keeping the text for future reference
+
+\begin{remark}
+  The results below are not sufficient to establish \MINDCCA security for \FrodoKEM, as we do not establish the \MINDCPA security of \FrodoPKE.
+  \cpnote{The previous statement is not true, and sells us somewhat short.
+    We do (trivially) have an \MINDCPA bound for \FrodoPKE; it is just looser than the one for (single-challenge) \INDCPA.
+    But it does establish \MINDCCA security for \FrodoKEM.}
+  What they do establish is that \MINDCCA security for \FrodoKEM reduces \emph{tightly} to the \MINDCPA security of \FrodoPKE, which is not true for \eFrodoKEM.
+  Notably, the following results prove that the multi-ciphertext attack described in \autoref{sec:intro:multi-challenge} to \emph{un-salted} \FrodoKEM is not possible against \emph{salted} \FrodoKEM.
+  \cpnote{I don't think the previous sentence is true.
+    What if the \MINDCPA insecurity of \FrodoPKE grows linearly with $n$; then according to the theorem, the \MINDCCA security of \FrodoKEM might also grow linearly with $n$, which puts us in the same situation as with the multi-ciphertext attack, right?}
+  Furthermore, they show that any multi-challenge attack on \FrodoKEM would be the result of a multi-sample attack on LWE.
+  \cpnote{I think the previous sentence is basically true, but it's vague; LWE is already a multi-sample problem.
+    I think we're talking about an attack on LWE with a large number of samples \emph{and secrets} (shared across the samples), right?}
+\end{remark}
+
+\fi
+
+\begin{theorem}[\MINDCPA PKE $\implies$ \MINDCCA KEM in classical ROM,
+  with distribution switch]\label{thm:cca-kem-to-cpa-pke-rom-parameterized}
+  \ \newline
+  Let $\PKE_X = (\KeyGen,\Enc,\Dec)$ be a $\delta(u)$-correct public-key
+  encryption scheme with message space $\MsgSp$ that is parameterized
+  by a distribution~$X$, and let $s$ be an upper bound on the total
+  number of samples drawn from~$X$ by $\KeyGen$ and $\Enc$ combined.
+  Let $G_1$, $G_2$ and $F$ be independent random oracles, and let
+  $\KEMnotperpprime_X=\SFOnotperpprime[\PKE_X,G_1,G_2,F]$ be the KEM
+  obtained by applying the $\SFOnotperpprime$ transform from
+  \autoref{def:qfo} to $\PKE_{X}$. Let $P,Q$ be any discrete
+  distributions. There exists a classical algorithm (a reduction)
+  $\Bdversary$ against the \INDCPA security of $\PKE_Q$, which uses as
+  a ``black box'' subroutine any $\Adversary$ against the \INDCCA
+  security of $\KEMnotperpprime_P$ that makes at most $\qro$ oracle
+  queries, for which
+  \cpnote{Changed the $n^{2}$ numerator to $n(n-1)$; check that this is correct in the context of the other paper and update if possible.}
+  \begin{align}
+        \label{eq:cca-to-cpa-renyi-bound}
+        %\begin{split}  
+        \Adv{\MINDCCA}{\KEMnotperpprime_P}(\Adversary) \leq &
+        \bigg( \left(
+        \frac{n\cdot (2\qro+1)}{|\MsgSp||\saltlist|}
+        + \qro \cdot \delta(u)
+        + 3 \cdot\Adv{\MINDCPA}{\PKE_Q}(\Bdversary) \right) \nonumber \\
+        & \cdot \exp(s \cdot \RD_\alpha(P \| Q)) \bigg)^{1-1/\alpha}+\frac{\qro}{|\MsgSp|}+ \frac{n(n-1)}{|\MsgSp| \cdot 2^{\lengthsalt}} 
+        %\end{split}
+  \end{align}
+  for any $\alpha > 1$, where the \renyi divergence $\RD_\alpha$ is defined in \autoref{def:renyi}.
+  The total running time of $\Bdversary$ is about that of $\Adversary$ plus the time needed to simulate the random oracles.
+\end{theorem}
+
+We point out that when $P=Q$ are the same distribution, we have
+$\exp(s \cdot \RD_{\alpha}(P \| Q)) = 1$ for any $\alpha > 1$ and
+hence can take~$\alpha$ to be arbitrarily large, making the exponent
+$1-1/\alpha$ approach~$1$ in the limit. This special case is a main
+theorem from~\cite{TCC:HofHovKil17}, and it relates the \INDCCA
+security of $\FrodoKEM$ to the \INDCPA security of $\FrodoPKE$ when
+they use the same error distribution, e.g., ~$\chi_{\Frodo}$.
+
+The proof of \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}
+combines components from three separate works: the modular analysis of
+the Fujisaki--Okamoto transform by Hofheinz, H{\"o}velmanns and Kiltz~\cite{TCC:HofHovKil17}, the work on tight multi-target security for key encapsulation in \cite{GlabushThesis}, and the
+work of Langlois, Stehl{\' e} and Steinfeld relating the security of
+search problems when one distribution is substituted by another via
+analysis of the \renyi divergence~\cite{EC:LanSteSte14}.  More
+specifically, the proof of the theorem proceeds in the following
+steps:
+\begin{enumerate}
+\item We apply Theorem 3.2 by Hofheinz et al.~\cite{TCC:HofHovKil17}, which shows that their $\T$
+  transform converts an \INDCPA-secure public-key encryption scheme
+  $\PKE_{Q}$ into an \OWPCA-secure public-key encryption scheme with
+  deterministic encryption (in the random oracle model). Likewise, Theorem 3.2 in~\cite{TCC:HofHovKil17} is adapted in~\cite{GlabushThesis} to the $\ST$ transform used by $\FrodoKEM$; see~\cite[Section 4.2]{GlabushThesis}.
+\item Next, we apply distribution substitution for the \OWPCA security
+  experiment (which represents a search problem), to switch from
+  distribution~$Q$ to~$P$.
+\item Finally, we apply Glabush's adaptation of Theorem 3.4 from~\cite{TCC:HofHovKil17}, which shows that their
+  $\Unotperp$ transform converts an \MOWPCA-secure public-key
+  encryption scheme into an \MINDCCA-secure KEM (in the random oracle
+  model).
+\end{enumerate}
+
+Hofheinz et al.~\cite{TCC:HofHovKil17} denote the composition of the $\T$ and $\Unotperp$ transforms as
+the $\FOnotperp$ transform.  As described in
+\autoref{sec:cca-transform}, we use a variant of this
+transform called $\SFOnotperpprime$, which differs from
+$\FOnotperp$ as follows:
+\begin{itemize}
+\item The $\T$ transform is replaced with the $\ST$ transform.
+\item $\SFOnotperpprime$ uses a single hash function (with longer
+  output) to compute $r$ and $K$, whereas $\FOnotperp$ uses two
+  separate functions, but these are equivalent when the hash functions
+  are modeled as independent random oracles and have appropriate
+  output lengths.
+\item The~$\SFOnotperpprime$ computation of $r$ and $K$ also takes the
+  hash $G_1(\pk)$ of the public key $\pk$ as input,
+  whereas~$\FOnotperp$ does not; this change preserves the relevant
+  theorems (with trivial changes to the proofs), and has the potential
+  to provide stronger multi-target security.
+\end{itemize}
+
+If we apply all the changes above, excepting the replacement of $\T$ by $\ST$, this results in the $\FOnotperpprime$ transform~\cite{EuroSP:Kyber,NISTPQC-R3:FrodoKEM20}.
+The $\FOnotperpprime$ transform is applied to \FrodoPKE to build \eFrodoKEM.
+
+
+\subsection{\INDCCA security in the quantum random oracle model}
+\label{sec:strength:cca-kem-qrom}
+
+Jiang et al.~\cite{C:JZCWM18} show that the $\FOnotperp$ transform yields an \INDCCA-secure KEM from an \OWCPA-secure public-key encryption scheme, in the \emph{quantum} random oracle model.
+In~\cite{GlabushThesis}, this result was extended as to show that the $\SFOnotperp$ transform generically yields an $\MINDCCA$-secure KEM from a $\MINDCPA$ secure PKE.
+This result extends to the $\SFOnotperpprime$ transform.
+
+\begin{theorem}
+  Let $\PKE = (\KeyGen,\Enc,\Dec)$ be a $\delta(u)$-correct public-key
+  encryption scheme with message space $\MsgSp$. For any quantum adversary $\Bdversary$ against the $\MINDCCA$ security of $\KEMnotperp := \SFOnotperpprime[\PKE, G, H, \lengthsalt]$, there exists a quantum adversary $\Adversary$ against the $\MINDCPA$ security of $\PKE$, with roughly the same running time, such that
+  \begin{equation}\label{thm:cca-kem-to-cpa-pke-qrom}
+    \begin{split}  
+        \Adv{\MINDCCA}{\KEMnotperp}(\Adversary) \leq &\dfrac{u^2}{|\M|2^{\lengthsalt}} + 4(\qro + 1)\sqrt{\dfrac{u\cdot n}{|\M\|\saltlist|}} + 16(\qro + 1)^2\cdot \delta(u)\\ & +
+        4(\qro+1)\sqrt{\dfrac{u}{\M}} + 2\sqrt{(\qro + 1)\Adv{\MINDCPA}{\PKE}(\Bdversary)}
+    \end{split}
+  \end{equation}
+\end{theorem}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

@@ -1,0 +1,838 @@
+\section{Security reductions}%
+\label{sec:Security_appendix}
+
+$\FrodoKEM$ depends on the hardness of plain learning with errors. A summary of the reductions supporting the security of $\FrodoKEM$ is
+as follows:
+
+\begin{enumerate}
+\item $\FrodoKEM$, using the concrete error distributions
+  $\chi_\Frodo$ specified in \autoref{tab:distribution}, is an
+  \INDCCA-secure KEM against classical attacks in the classical random
+  oracle model, under the assumption that $\FrodoPKE$ using a rounded
+  Gaussian error distribution is an \INDCPA-secure public-key
+  encryption scheme against classical attacks.  This is
+  \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}, and the
+  reduction is tight.  The argument combines results
+  of~\cite{TCC:HofHovKil17} on the modular FO transform with results
+  of~\cite{EC:LanSteSte14} on \renyi divergence. We also note that the
+  same conclusion follows from the assumption that $\FrodoPKE$ using
+  the distributions~$\chi_{\Frodo}$ is \INDCPA secure, using the same
+  proof but without any analysis of \renyi divergence. 
+
+\item $\FrodoKEM$, using any error distribution, is an \INDCCA-secure
+  KEM against quantum attackers in the quantum random oracle model,
+  under the assumption that $\FrodoPKE$ using the same error
+  distribution is an \OWCPA-secure public-key encryption scheme
+  against quantum attackers.  This is
+  \autoref{thm:cca-kem-to-cpa-pke-qrom}, and the reduction is
+  non-tight.  We view this theorem as giving support for the security
+  of general constructions of LWE-based KEMs in the style of FrodoKEM
+  against quantum adversaries, but it does not concretely support the
+  bit-security of the six \FrodoKEM instantiations in this document,
+  which is why we omit the corresponding column from
+  \autoref{tab:security}.
+\item $\FrodoKEM$ is an \MINDCCA secure key encapsulation mechanism in the ROM and the QROM for $n_j$ as large as $2^{64}$ for any user $j$, under the assumption that $\FrodoPKE$ is a \MINDCPA secure public-key encryption scheme. The argument is found in \cite{GlabushThesis} and \cite{Multi-challenge}.
+\item Changing the distribution of matrix $\bfA$ from a truly uniform
+  distribution to one generated from a public random seed in a
+  pseudorandom fashion does not affect the security of $\FrodoKEM$ or
+  $\FrodoPKE$, provided that the pseudorandom generator is modeled
+  either as an ideal cipher (when using $\AESOneTwoEight$) or a random
+  oracle (when using $\SHAKE128$). This is shown in
+  \autoref{sec:strength:pseudorandom-A}.
+
+\item $\FrodoPKE$, using any error distribution and a uniformly random
+  $\bfA$, is an \MINDCPA-secure public-key encryption scheme under the
+  assumption that the uniform-secret learning with errors decision
+  problem is hard for the same parameters (except for a small additive
+  loss in the number of samples), for either classical or quantum
+  adversaries.  This is a consequence of
+  \autoref{thm:cpa-pke-to-nf-dlwe} and \autoref{thm:nf-dlwe-to-dlwe},
+  and the result is tight.
+
+\item The uniform-secret learning with errors decision problem, using
+  a rounded Gaussian distribution with parameter $\sigma$ from
+  \autoref{tab:distribution} and an appropriate bound on the number of
+  samples, is hard under the assumption that the \emph{worst-case}
+  bounded-distance decoding with discrete Gaussian samples problem
+  (\BDDwDGS, \autoref{def:BDDwDGS}) is hard for related parameters.
+  \autoref{thm:bddwdgs-to-dlwe} gives a non-tight classical reduction
+  against classical or quantum adversaries (in the standard model).
+\end{enumerate}
+
+\subsection{\MINDCCA security reduction}%
+\label{sec:rom-mindcca}
+
+
+Here, we give a detailed description of the proof steps for \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}.
+
+\paragraph{Step 1: \MINDCPA $\PKE$ to \MOWPCA deterministic $\PKEOne$.}
+
+For completeness, we recall the definition of \MOWPCA, following the
+presentation of Hofheinz et al.~\cite{TCC:HofHovKil17}, and extended in \cite{GlabushThesis}.
+
+\begin{definition}[\MOWPCA for PKE~\cite{RSA:OkaPoi01}]%
+  \label{def:OW-CPA}
+  Let \PKE be a public-key encryption scheme with message space
+  $\MsgSp$ and let~$\Adversary$ be an algorithm.  The \MOWPCA security
+  experiment for $\Adversary$ attacking \PKE is
+  $\Exp{\MOWPCA}{\PKE}(\Adversary)$ from \autoref{fig:owpca}.  The
+  advantage of~$\Adversary$ in the experiment is
+  \[ \Adv{\MOWPCA}{\PKE}(\Adversary) :=  \Pr\left[ \Exp{\MOWPCA}{\PKE}(\Adversary) \Rightarrow 1 \right]  . \]
+\end{definition}
+
+\begin{figure}[h]
+	\centering
+	\fbox{
+		\begin{minipage}[t]{0.4\textwidth}
+			\underline{Experiment $\Exp{\MOWPCA}{\PKE}(\Adversary)$:}
+			\vspace{-1em}
+			\begin{algorithmic}[1]
+                    \FOR {$ j = 1,..., u$} \STATE{ $(\pk_j, \sk_j) \gets \PKE.\KeyGen()$} \ENDFOR
+                    \STATE $\Vec{\pk} = (\pk_1,...,\pk_u)$          
+				\STATE $m' \gets
+                                \Adversary^{\OPco(\cdot, \cdot), \challoracle(\cdot)}(\pk, c^*)$
+				\RETURN $\OPco(m', c^*)$
+			\end{algorithmic}
+		\end{minipage}
+		~
+		\begin{minipage}[t]{0.4\textwidth}
+			\underline{Oracle $\OPco(m, c)$:}
+			\vspace{-1em}
+			\begin{algorithmic}[1]
+				\IF {$\PKE.\Dec(\sk, c)=m$}
+				\RETURN 1
+				\ELSE
+				\RETURN 0
+				\ENDIF
+			\end{algorithmic}
+                \underline{Oracle $\challoracle(j):$}
+                \vspace{-1em}
+                \begin{algorithmic}
+                \STATE $m\getsr \MsgSp$
+			\STATE $c^* \gets \PKE.\Enc(m, \pk)$
+                \end{algorithmic}
+		\end{minipage}
+%		~
+
+	}
+	\caption{Security experiment for \OWPCA.}
+	\label{fig:owpca}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\fbox{
+\begin{minipage}[t]{0.35\textwidth}
+\underline{$\PKEOne.\KeyGen()$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\RETURN $\PKE.\KeyGen()$
+\end{algorithmic}
+
+\medskip
+
+\underline{$\PKEOne.\Enc(\mu, \pk)$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $\salt \getsr \{0,1\}^{\lengthsalt}$
+\STATE $r \gets G_2(\mu\|\salt)$
+\STATE $c \gets \PKE.\Enc(\mu, \pk; r)$
+\RETURN $c\|\salt$
+\end{algorithmic}
+\end{minipage}
+~
+\begin{minipage}[t]{0.6\textwidth}
+\underline{$\PKEOne.\Dec(c\|\salt, \sk)$:}
+%\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $\mu' \gets \PKE.\Dec(c, \sk)$
+\IF {$\mu' = \bot$ or $c \ne \PKE.\Enc(\mu', \pk; G_2(\mu'\|\salt))$}
+  \RETURN $\bot$
+\ELSE
+  \RETURN $\mu'$
+\ENDIF
+\end{algorithmic}
+\end{minipage}
+}
+\caption{Construction of deterministic public-key encryption scheme $\PKEOne=\ST[\PKE, G_2]$ from a public-key encryption scheme $\PKE$ and hash function $G_2$.}
+\label{fig:ST}
+\end{figure}
+The $\ST$ transform converts a public-key encryption scheme
+$\PKE$ to a deterministic public-key encryption scheme $\PKEOne$; see
+\autoref{fig:ST}. Glabush's Theorem 4.2.3 tightly establishes the
+$\OWPCVA$-security of $\PKEOne$ under, among others, the assumption
+that $\PKE$ is \INDCPA secure and $\gamma$-spread. (In the \OWPCVA
+security game, the attacker additionally has a ciphertext-validity
+oracle, which checks whether a queried ciphertext has a valid
+decryption.)  These results were adapted to the multi-challenge setting in \cite{GlabushThesis}. However, they note that $\MOWPCA$ security follows
+(tightly) \emph{without} the $\gamma$-spread assumption, because in
+the security bounds $\gamma$-spreadness is relevant only to
+ciphertext-validity queries.  We state that adapted version here.
+
+\begin{lemma}[\cite{TCC:HofHovKil17, GlabushThesis}, Theorem~4.2.3, $\MOWPCA$ version]
+  \label{lem:ST}
+  Let $\PKE$ be a $\delta$-correct public-key encryption scheme with
+  message space $\MsgSp$. For any $\OWPCA$ adversary $\Adversary$ that
+  issues at most~$q_G$ queries to the random oracle~$G_2$ and~$q_P$
+  queries to the plaintext-checking oracle, there exists an $\INDCPA$
+  adversary $\Bdversary$ such that
+  \[
+  \Adv{\MOWPCA}{\PKEOne}(\Adversary) \leq q_G \cdot \delta(u) + \frac{2 q_G
+    + 1}{|\MsgSp||\saltlist|} + 3 \cdot \Adv{\MINDCPA}{\PKE}(\Bdversary) \enspace
+  ,
+  \]
+  and the running time of $\Bdversary$ is about that of $\Adversary$
+  plus the time needed to simulate the random oracle.
+\end{lemma}
+
+\noindent It is straightforward to verify from the proof that
+$\Bdversary$ uses $\Adversary$ solely as a ``black box'' subroutine.
+
+\paragraph{Step 2: Approximating the error distribution.}
+
+The rounded Gaussian distribution (\autoref{def:rounded-gaussian}),
+which is important to the worst-case-to-average-case reduction, is
+difficult to sample on a finite computer (and impossible to sample in
+constant time). Following Langlois et al.~\cite{EC:LanSteSte14}, we
+replace this infinite-precision distribution with a finite
+approximation, and quantify the \MOWPCA security loss using their
+\renyi divergence.
+
+
+
+\begin{definition}[\renyi divergence]
+  \label{def:renyi}
+  The \renyi divergence of positive order $\alpha \neq 1$ of a
+  discrete distribution~$P$ from a distribution~$Q$ is defined as
+  \[
+    \RD_\alpha(P\|Q)=\frac1{\alpha-1}\ln \parens*{
+    \sum_{x\in\mathop{\mathrm{supp}} P} P(x)\left(
+      \frac{P(x)}{Q(x)}\right)^{\alpha-1}} \enspace .
+  \]
+\end{definition}
+
+Note that our definition differs from that of~\cite{EC:LanSteSte14} in
+that we take the logarithm of the sum, and that \renyi divergence is
+not symmetric.  The following result relates probabilities of a
+certain event occurring under two distributions as a function of their
+\renyi divergence.
+
+\cpnote{There is some odd spacing after the parenthesis in these lemmas that cite other works; see if we can figure out how to fix it.}
+
+\begin{lemma}[{{\cite[Lemma 4.1]{EC:LanSteSte14}}}]%
+  \label{lem:renyi}
+  Let $S$ be an event defined in a probabilistic experiment $G_Q$ in
+  which~$s$ samples are drawn from distribution $Q$. Then the
+  probability that $S$ occurs in the same experiment but with~$Q$
+  replaced by~$P$ is bounded as follows:
+  \begin{equation}
+    \label{eqn:renyi_loss}
+    \Pr[G_P(S)] \leq \left( \Pr[G_Q(S)] \cdot \exp(s \cdot
+      \RD_\alpha(P\|Q)) \right)^{1-1/\alpha}.
+  \end{equation}
+\end{lemma}
+
+It immediately follows that reductions from any \emph{search} problem,
+such as the one represented by the $\MOWPCA$ game, are preserved up to
+the relaxation in \eqref{eqn:renyi_loss}. For any given security
+relationship, and any concrete choice of the two distributions~$P$
+and~$Q$, the loss can be minimized by choosing an optimal value of the
+order~$\alpha$.
+
+\begin{corollary}[Distribution substitution for \MOWPCA]
+  \label{cor:sbst-owpca}
+  Let $\PKE_X$ be a public-key encryption scheme that is parameterized
+  by a distribution~$X$, and let~$s$ be an upper bound on the total
+  number of samples drawn from~$X$ by $\PKE_X.\Enc$ and
+  $\PKE_X.\KeyGen$ combined. Let $\Adversary$ be an \OWPCA adversary
+  against $\PKE_X$, and let~$P$ and~$Q$ be discrete
+  distributions. Then for any $\alpha > 1$,
+  \[
+    \Adv{\MOWPCA}{\PKE_P}(\Adversary) \leq
+    \left( \Adv{\MOWPCA}{\PKE_Q}(\Adversary)\cdot
+      \exp(s \cdot \RD_\alpha(P \| Q)) \right)^{1-1/\alpha} \enspace .
+  \]
+\end{corollary}
+
+\begin{proof}
+  This follows immediately from \autoref{lem:renyi}, with $S$ being
+  the event that~$\Adversary$ ``wins'' the \OWPCA experiment from
+  \autoref{fig:owpca}, i.e., causes it to output~$1$.
+\end{proof}
+
+We use \autoref{cor:sbst-owpca} to relate the \OWPCA security of
+$\T[\FrodoPKE_{P},G_{2}]$ to the \OWPCA security of
+$\T[\FrodoPKERGauss,G_{2}]$ where $\FrodoPKERGauss$ is the same as
+$\FrodoPKE$ but with the error distribution $P=\chi_{\Frodo}$ replaced
+by a rounded Gaussian distribution~$Q=\Psi$
+(see \autoref{def:rounded-gaussian}).
+
+\paragraph{Step 3: \MOWPCA deterministic $\PKEOne$ to \MINDCCA KEM.}
+Hofheinz et al.~\cite{TCC:HofHovKil17} define the $\Unotperp$ transform from a deterministic public-key
+encryption scheme $\PKEOne$ to a key encapsulation mechanism
+$\KEMnotperp$; see \autoref{fig:Unotperp}. Hofheinz et al.'s Theorem~3.4 shows
+the \INDCCA security of $\KEMnotperp = \Unotperp[\PKEOne,F]$ assuming
+the \OWPCA security of the underlying $\PKEOne$. This result was adapted to the multi-challenge setting in Theorem 4.2.4 from~\cite{GlabushThesis}.
+This result is stated below in \autoref{lem:Unotperp}. 
+
+\begin{figure}[h]
+\centering
+\fbox{
+\begin{minipage}[t]{0.4\textwidth}
+\underline{$\KEMnotperp.\KeyGen()$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $(\pk, \sk) \getsr \PKEOne.\KeyGen()$
+\STATE $s \getsr \MsgSp$
+\STATE $\sk' \gets (\sk, s)$
+\RETURN $(\pk, \sk')$
+\end{algorithmic}
+
+\medskip
+
+\underline{$\KEMnotperp.\Encaps(\pk)$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $\salt \getsr \{0,1\}^{\lengthsalt}$
+\STATE $c\|\salt \gets \PKEOne.\Enc(\mu, \pk)$
+\STATE $ss \gets F(\mu, c\|\salt)$
+\RETURN $(c\|\salt, ss)$
+\end{algorithmic}
+\end{minipage}
+~
+\begin{minipage}[t]{0.5\textwidth}
+\underline{$\KEMnotperp.\Decaps(c\|\salt, (\sk, s))$:}
+%\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $\mu' \gets \PKE.\Dec(c\|\salt, \sk)$
+\IF {$\mu' \ne \bot$}
+  \RETURN $ss' \gets F(\mu', c\|\salt)$
+\ELSE
+  \RETURN $ss' \gets F(s, c\|\salt)$
+\ENDIF
+\end{algorithmic}
+\end{minipage}
+}
+\caption{Construction of key encapsulation mechanism $\KEMnotperp=\Unotperp[\PKEOne, F]$ from a deterministic public-key encryption scheme $\PKEOne$ and hash function $F$.}
+\label{fig:Unotperp}
+\end{figure}
+
+\cpnote{Here's another.}
+
+\begin{lemma}[{{\cite[Theorem~4.2.4]{GlabushThesis}}}]%
+  \label{lem:Unotperp}
+  Model~$F$ as a random oracle.  Then if $\PKEOne$ is
+  $\delta_1$-correct, so is $\KEMnotperp$.  For any $\INDCCA$
+  adversary $\Adversary$ against $\KEMnotperp$ issuing at
+  most $q_F$ queries to~$F$, there exists an $\OWPCA$ adversary
+  $\Bdversary$ against $\PKEOne$ that makes at most $q_F$ queries to
+  its plaintext-checking oracle, and for which
+  \[
+    \Adv{\MINDCCA}{\KEMnotperp}(\Adversary) \leq \frac{n^2}{|\M||\saltlist|} + \frac{q_F}{|\MsgSp|} +
+    \Adv{\MOWPCA}{\PKEOne}(\Bdversary) \enspace ,
+  \]
+  where the running time of $\Bdversary$ is about that of
+  $\Adversary$, plus the time to simulate the random oracle and
+  decapsulation queries.
+\end{lemma}
+
+It is straightforward to verify from the proof that $\Bdversary$ uses
+$\Adversary$ solely as a ``black box'' subroutine.  Together,
+\autoref{lem:ST}, \autoref{cor:sbst-owpca}, and \autoref{lem:Unotperp}
+establish \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}.
+
+\paragraph{Applying \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}.}
+For an application of
+\autoref{thm:cca-kem-to-cpa-pke-rom-parameterized} to our schemes,
+consider the relation between the $\INDCCA$ security of \FrodoKEMLOne
+and the \MINDCPA security of $\FrodoPKELOne_\Psi$, where the error
+distribution of the latter is taken to be the rounded Gaussian
+$\Psi_{2.8\cdot\sqrt{2\pi}}$ as defined in \autoref{sec:gaussians}.
+
+To extract exact bounds on the \MINDCCA security (in the classical ROM)
+of \FrodoKEMLOne, we make a number of assumptions about the underlying
+cost model. Specifically,
+\begin{itemize}
+\item We ignore the overhead of running the reduction
+  of \autoref{thm:cca-kem-to-cpa-pke-rom-parameterized}, including the
+  cost of simulating random oracles.
+\item The cost to the adversary of \emph{making} an oracle query is
+  $2^{18}$ classical gates. This bound is based on the NIST Call for
+  Proposals, Section 4.A.5, which estimates the cost of finding collisions
+  in SHA-3 at all security levels. (Here we
+  ignore the small performance differences between $\SHAKE128$,
+  $\SHAKE256$, and SHA3-256.)
+\item We interpret ``$b$ bits of
+  classical security'' as a statement that the advantage in the
+  corresponding game of a uniform $t$-gate classical adversary is
+  bounded by $t/2^b$. For some tasks, such as collision finding,
+  this upper bound can be quite loose for smaller values
+  of~$t$ (and thus beneficial to the adversary).
+\item The \MINDCPA security of $\FrodoPKELOne_\Psi$ is given by the
+  smaller of the costs of the primal and dual attacks on the LWE
+  problem (\autoref{tab:attacks}), discounted by the reduction factor
+  of $\nbar + \mbar=16$ (\autoref{thm:cpa-pke-to-nf-dlwe}),
+  yielding~$2^{-145.6}$.
+\end{itemize}
+
+Under these assumptions, if an adversary $\Bdversary$ has uniform gate
+complexity $t$, then it has advantage
+$\Adv{\indcpa}{\FrodoPKELOne_\Psi}(\Bdversary)$ bounded
+by~$t\cdot 2^{-145.6}$.
+
+The \renyi divergence of $\chi_\FrodoLOne$ from the rounded Gaussian
+is $\RD_\alpha(\chi_\FrodoLOne\| \Psi_{2.8\cdot \sqrt{2\pi}}) \leq
+0.0000324$ for $\alpha=200$ (\autoref{tab:distribution}). The number of
+samples drawn from the error distribution by $\FrodoPKE.\KeyGen$ is
+$2n\nbar$, and by $\FrodoPKE.\Enc$ is $2\mbar n+\mbar \nbar$, which
+for $n=640$ and $\mbar=\nbar=8$ totals
+$s=2\times(8 + 8)\times 640+64=20544$.
+
+Substituting $\qro < t\cdot 2^{-18}$, $|\MsgSp|=2^{128}$ and
+$\delta<2^{-138.7}$ into \autoref{eq:cca-to-cpa-renyi-bound}, we can
+bound the advantage in $\Exp{\indcca}{\FrodoKEMLOne}$ for an adversary
+$\Adversary$ with gate count~$t \geq 1$ as follows:
+\begin{align*}
+  \Adv{\indcca}{\FrodoKEMLOne}(\Adversary)
+  &< 2^{-146} \cdot t + \left((2.01 \cdot 2^{-146} + 3 \cdot
+    2^{-145.6}) \cdot t \cdot \exp(20544\cdot 0.0000324)\right)^{0.995} \\
+  &< 2^{-141.6} \cdot t \enspace .
+\end{align*}
+Similarly, computed bounds on the advantage of a classical \INDCCA
+adversary for other parameter settings appear
+in \autoref{tab:security}.
+
+\subsubsection{Deterministic generation of $\bfA$}\label{sec:strength:pseudorandom-A}
+
+\newcommand{\idx}{\ensuremath{\mathsf{idx}}}
+\newcommand{\Idx}{\ensuremath{\mathrm{Idx}}}
+\newcommand{\IC}{\ensuremath{\mathrm{IC}}}
+
+The matrix $\bfA$ in $\FrodoKEM$ and $\FrodoPKE$ is  deterministically expanded from a short random seed in the function $\Frodo.\gen$ either using $\AESOneTwoEight$ or $\SHAKE128$. In order to
+relate $\FrodoKEM$ and $\FrodoPKE$'s security to the hardness of the learning with errors
+problem, we argue that we can replace a uniformly sampled $\bfA\in
+\bbZ_q^{n\times n}$ with matrices sampled according to
+$\Frodo.\gen$. Although the matrix appears pseudorandom under standard security assumptions to an adversary without access to the seed, we argue security of this step against a stronger (and more realistic) adversary via the indifferentiability framework
+\cite{TCC:MauRenHol04, C:CDMP05}.
+
+Informally, a construction $\calC$ with
+access to an ideal primitive $\calG$ is said to be $\eps$-indifferentiable
+from an ideal primitive $\calF$ if there exists a simulator $\calS$ such that
+for any polynomial time distinguisher $\calD$ it holds that $\left| \Pr\left[
+\calD^{\calC, \calG} = 1  \right] - \Pr\left[\calD^{\calF, \calS} = 1
+\right] \right|< \eps$. An
+indifferentiability argument implies that any cryptosystem secure in the
+$\calF$-model remains secure (in a tight sense) in the $\calG$-model with
+$\calF$ instantiated as $\calC^\calG$ \cite{TCC:MauRenHol04}. In what follows, we consider the ideal
+primitive $\calF$ to be an ideal ``domain expansion'' function expanding a small
+seed to a matrix $\bfA$. Critically, the security of the step depends on the properties of $\calG$ rather than randomness of the seed. The construction $\calC$ and primitive
+$\calG$ depend on whether we use $\AESOneTwoEight$ or $\SHAKE128$, modeled below as an ideal cipher and an ideal extendable-output function (XOF) respectively.
+
+\paragraph{Using AES128 to generate $\bfA$.}
+\autoref{alg:genA_AES} generates the entries of $\bfA$ as $16$-bit values and then reduces each one modulo $q$. For simplicity, we assume that $\bfA$ consists of  $N=16n^2$ bits 
+and we set $M = N/128$. This means that $\bfA$ consists of $M$ $128$-bit
+$\AESOneTwoEight$ blocks. The pseudorandom bits in the $i$th block are
+generated by encrypting a fixed index $\idx_i$ with a uniformly random $\seedA\in \{0,1\}^{128}$ as the key. Throughout, we refer to the set $\Idx := \left\{\idx_1,\ldots, \idx_M\right\}$ as the set of indices used in the pseudorandom generation of $\bfA$.
+
+The ideal domain expansion primitive $\calF$ expands a uniformly random seed
+$\seedA \in \{0,1\}^{128}$ to a larger bit string $s_1 \| s_2 \| \cdots \|
+s_M \in \{0, 1\}^{128M}$ subject to the condition that $s_i \neq s_j$ for any
+distinct pair of $i$, $j$. Observe that a uniformly sampled $\bfA$ satisfies
+this condition with probability at least $1-M^2/2^{128}$. In our security
+reductions, the matrix $\bfA$ is constructed through $m = n$ calls to the LWE
+oracle (\autoref{def:dlweproblem}). By increasing the number of calls to this
+oracle marginally, by setting $m = 1.01n > n \cdot (1-M^2/2^{128})^{-1}$, we
+can construct an LWE matrix $\bfA$ sampled from the same distribution as the
+output of $\calF$ with overwhelming probability without affecting its
+underlying security.
+\medskip
+
+When $\Frodo.\gen$ uses $\AESOneTwoEight$, we consider a construction
+$\calC^\calG$
+in the Ideal Cipher model implementing $\calF$ as $\AESOneTwoEight_{\seedA}(\idx_1) \| \cdots \| \AESOneTwoEight_{\seedA}(\idx_M)$. We show that
+$\calC^\calG$ is indifferentiable from $\calF$ as follows. Consider the two
+worlds with which $\calD$ interacts to make queries on the construction
+$\calC$ and $\calG$:
+\begin{itemize}
+	\item \textbf{REAL.} In the real world, upon query $\calC(k)$, $\calD$
+	receives $\AESOneTwoEight_k(\idx_1) \| \cdots \| \AESOneTwoEight_k(\idx_M)$. 
+      Queries to $\calG$ are answered naturally with
+	$\AESOneTwoEight_{(\cdot)}(\cdot)$ or $\AESOneTwoEight^{-1}_{(\cdot)}(\cdot)$ as
+	required.
+	\item \textbf{IDEAL.} In the ideal world, upon query $\calC(k)$, the
+	simulator $\calS$ simulates $\calF$ as follows. $\calS$ samples $M$
+	uniformly random strings $s_1, \ldots, s_M$ subject to no collisions and outputs
+	$\calF(k) = s_1 \| \cdots \| s_M$. It additionally stores a mapping $M_k$
+	from $\{\idx_1, \ldots, \idx_M\}$ to $S = \{s_1, \ldots, s_M\}$. These
+	will be used to answer $\calG$ queries. Without loss of generality, we
+	assume that whenever $\calG$ is queried on a key $k$, $\calS$ pretends
+	that $\calC(k)$ has been queried and sets up $M_k$.
+	
+	$\calD$ can now effectively simulate an ideal cipher $\calG$ as follows.
+	For forward queries with an input in $\Idx$ or backward queries with
+	an input in $S_k$, $\calS$ uses the mapping $M_k$ to answer the query in a
+	manner consistent with $\calC(\cdot)$ simulation. For all other queries, the simulator maintains an
+	on-the-fly table to simulate an ideal cipher. It samples independent
+	uniformly random responses for each input query (forward or backward) subject to
+	the fact that the resulting table of input/output pairs $(x, y)$ combined
+	with $(\idx_i, s_i)$ pairs remains a permutation
+	over $\{0, 1\}^{128}$ for every key $k$.
+\end{itemize}
+
+It is easy to see that the simulator is efficient. Indifferentiability of the
+two worlds follows by construction as $\AESOneTwoEight(\cdot, \cdot)$ is
+modeled as an ideal cipher. Thus, in generating $\bfA$ starting with a seed
+$\seedA$ using $\AESOneTwoEight$, we can effectively replace the ideal
+domain extension primitive $\calF$ with our construction in the ideal cipher
+model.
+
+\paragraph{Using $\SHAKE128$ to generate $\bfA$.} An argument in using
+$\SHAKE128$ to expand $\seedA$ to the matrix~$\bfA$ is significantly
+simpler. In the random oracle model, $\SHAKE128$ is an ideal XOF
+\cite{dworkin2015sha}. In fact, for every distinct prefix $str$, we can
+model $\SHAKE128(str \| \cdot, \ell)$ as an independent hash function mapping
+$\{0, 1\}^{128}$ to $\{0, 1\}^\ell$. 
+
+The domain expansion step is constructed
+by computing $\SHAKE128(\inner{i} \| \seedA, 16n)$ for $1 \leq i \leq n$
+where $\inner{i} \in \bit^{16}$; each step fills up the $i$th row of the matrix $\bfA$. As each row is
+independently constructed via an ideal hash function, this construction maps
+a uniformly random seed $\seedA$ to a much larger uniformly random matrix $\bfA$
+thereby implementing the ideal functionality $\calF$ perfectly.
+
+\paragraph{Reusing $\bfA$.}
+
+Finally, we point out that generating~$\bfA$ from
+$\seedA$ can be a significant computational burden, but this
+cost can be amortized by relaxing the requirement that a fresh
+$\seedA$ be used for every instance of key encapsulation, e.g., by
+caching and reusing~$\bfA$ for a small period of time. In this case,
+we observe that the cost of generating~$\bfA$ represents roughly 40\% of the cost
+of encapsulation and decapsulation on the targeted x64 Intel machine used in 
+\autoref{sec:performance}. 
+A straightforward argument shows that the amortization above is compatible with all the security
+reductions in this section.  But importantly, it now allows for an
+all-for-the-price-of-one attack against those key encapsulations that share
+the same~$\bfA$. This can be mitigated by making sure that we cache and
+reuse~$\bfA$ only for a small number of uses, but we need to do this
+in a very careful manner.
+
+\paragraph{Generating $\bfA$ from joint randomness.}
+It is also possible to generate $\bfA$ from joint randomness or using protocol
+random nonces.  For example, when integrating \FrodoKEM into the TLS protocol,
+$\bfA$ could be generated from a seed consisting of the random nonces \texttt{client\_random}
+and \texttt{server\_random} sent by the client and server in their
+\texttt{ClientHello} and \texttt{ServerHello} messages in the TLS handshake protocol.  
+This functionality does not match the standard
+description of a KEM and the API provided by NIST, but is possible in general.
+A design with both parties contributing entropy to the seed might better
+protect against all-for-the-price-of-one attacks by being more robust to
+faulty
+random number generation at one of the parties.
+
+\subsubsection{\INDCPA security}\label{sec:strength:cpa-pke}
+
+In this section we show that $\FrodoPKE$, using any error distribution
+$\chi$ and uniformly random $\bfA$, is an \INDCPA-secure public-key
+encryption scheme based on the hardness of the learning with errors
+decision problem with the same error distribution. We first tightly
+relate the \INDCPA security of $\FrodoPKE$ to the normal-form DLWE
+problem, where the secret coordinates have the same distribution as
+the errors.
+
+\begin{theorem}[normal-form DLWE $\implies$ $\INDCPA$ security of
+  $\FrodoPKE$]
+  \label{thm:cpa-pke-to-nf-dlwe}
+  Let $n, q, \mbar, \nbar$ be positive integers, and $\chi$ be a
+  probability distribution on $\bbZ$. There exist classical algorithms
+  $\Bdversary_{1}, \Bdversary_{2}$ that use as a ``black box''
+  subroutine any (quantum or classical) algorithm $\Adversary$ against
+  the $\INDCPA$ security of $\FrodoPKE$ (with a uniformly random
+  $\bfA$), for which
+  \[ \Adv{\indcpa}{\FrodoKEM}(\Adversary) \leq \nbar \cdot
+    \Adv{\nfdlwe}{n,n,q,\chi}(\Bdversary_1) + \mbar \cdot
+    \Adv{\nfdlwe}{n,n+\nbar,q,\chi}(\Bdversary_2) \enspace . \] The
+  running times of $\Bdversary_1$ and $\Bdversary_2$ are approximately
+  that of $\Adversary$.
+\end{theorem}
+The proof of \autoref{thm:cpa-pke-to-nf-dlwe} is the same as that of
+\cite[Theorem~3.2]{RSA:LinPei11} or \cite[Theorem~5.1]{CCS:BCDMNN16}.
+
+The following theorem relates the LWE decision problem in its normal
+form to one where the secret is \emph{uniformly random} over
+$\bbZ_{q}$. We need this only for connecting the latter variant, which
+arises in the reduction from worst-case lattice problems described in
+the next subsection, to the normal form as used in $\FrodoPKE$. (In
+particular, our cryptanalysis and concrete security bounds are for the
+normal form.) The theorem is specialized to power-of-two modulus~$q$
+(our case of interest), and the stated bounds in the advantage and
+number of LWE samples are more precise than those given in the
+original work. These bounds follow from the fact that, by a
+straightforward calculation, a uniformly random $n$-by-$(n+k)$ matrix
+over~$\bbZ_{q}$ has an invertible $n$-by-$n$ submatrix except with
+probability at most~$2^{-k}$.
+
+\begin{theorem}[uniform-secret DLWE $\implies$ normal-form DLWE; \cite{C:ACPS09}, Lemma~2]
+  \label{thm:nf-dlwe-to-dlwe}
+  Let $n, m, k, q$ be positive integers with $q \geq 2$ a power of
+  two, and let $\chi$ be a probability distribution on $\bbZ$. There
+  exists a classical algorithm~$\Bdversary$ that uses as a ``black
+  box'' subroutine any (quantum or classical) algorithm $\Adversary$
+  against the normal-form LWE decision problem, for which
+  \[ \Adv{\nfdlwe}{n,m,q,\chi}(\Adversary) \leq \Adv{\dlwe}{n,m + n +
+      k,q,\chi}(\Bdversary) + 2^{-k} \enspace . \] The running time of
+  $\Bdversary$ is approximately that of $\Adversary$.
+\end{theorem}
+
+\subsubsection{Reductions from worst-case lattice problems}
+\label{sec:strength:lattice}
+
+When choosing parameters for LWE, one needs to choose an error
+distribution, and in particular its ``width.''  Certain choices (e.g.,
+sufficiently wide Gaussians) are supported by \emph{reductions} from
+worst-case lattice problems to LWE; see,
+e.g.,~\cite{Reg09,STOC:Peikert09,STOC:BLPRS13,STOC:PeiRegSte17}.  At a
+high level, such a reduction transforms any algorithm that solves LWE
+\emph{on the average}---i.e., for random instances sampled according
+to the prescribed distribution---into an algorithm of related
+efficiency that solves \emph{any instance} of certain lattice problems
+(not just random instances).
+
+% In this section we recall and slightly improve the most recent
+% reduction, from~\cite{STOC:PeiRegSte17}.
+
+%  For the (quantum) reduction from the worst-case approximate
+%   $\SIVP$ and $\GapSVP$ problems, we improve the constant factor in
+%   the lower bound~$c \sqrt{n}$ on the width of the LWE error, from~$2$
+%   to~\cpnote{new constant.}.
+
+The original work of~\cite{Reg09} and a follow-up
+work~\cite{STOC:PeiRegSte17} gave quantum polynomial-time reductions,
+from the worst-case $\GapSVP_\gamma$ (\autoref{def:GapSVP}),
+$\SIVP_\gamma$ (\autoref{def:SIVP}), and $\DGS_{\varphi}$
+(\autoref{def:DGS}) problems on $n$-dimensional lattices, to
+$n$-dimensional LWE (for an unbounded polynomial $m=\text{poly}(n)$
+number of samples) with Gaussian error of standard deviation
+$\sigma \geq c\sqrt{n}$.  The constant factor~$c$ was originally
+stated as $c=\sqrt{2/\pi}$, but can easily be improved to any
+$c > 1/(2\pi)$ via a tighter analysis of essentially the same
+proof.\footnote{The approximation factor~$\gamma$ for $\GapSVP$ and
+  $\SIVP$ is $\tilde{O}(qn/\sigma) = (qn/\sigma) \log^{O(1)} n$, and
+  the parameter~$\varphi$ for $\DGS$ is $\Theta(q\sqrt{n}/\sigma)$
+  times the ``smoothing parameter'' of the lattice.} However, for
+efficiency reasons our choices of~$\sigma$ (see
+\autoref{tab:distribution}) are somewhat smaller than required by these
+reductions.
+
+Instead, following~\cite[Section~1.1]{Reg09}, below we obtain an
+alternative \emph{classical} (i.e., non-quantum) reduction from a
+variant of the worst-case bounded-distance decoding~($\BDD$) problem
+to our LWE parameterizations. In contrast to the quantum reductions
+described above, which requires Gaussian error of standard deviation
+$\sigma \geq c \sqrt{n}$, the alternative reduction supports a
+smaller error width---as small as the ``smoothing
+parameter''~\cite{DBLP:journals/siamcomp/MicciancioR07} of the lattice
+of integers~$\ZZ$.  For the $\BDD$ variant we consider, which we call
+``BDD with Discrete Gaussian Samples'' ($\BDDwDGS$), the input
+additionally includes discrete Gaussian samples over the dual lattice,
+but having a larger width than known algorithms are able to
+exploit~\cite{DBLP:conf/approx/LiuLM06,DBLP:conf/coco/DadushRS14}. Details
+follow.
+
+% \cpnote{New theorem stating quantum reduction with best known
+%   constant?}
+
+\paragraph{Bounded-distance decoding with discrete Gaussian samples.}
+%\label{sec:strength:lattice:bdd}
+
+% \cpnote{Should this be a paragraph header, rather than a new
+%   subsubsection (which separates it from the previous one, on
+%   worst-case reductions?)}
+
+We first define a variant of the bounded-distance decoding problem,
+which is implicit in prior works that consider ``$\BDD$ with
+preprocessing,''~\cite{DBLP:journals/jacm/AharonovR05,DBLP:conf/approx/LiuLM06,DBLP:conf/coco/DadushRS14}
+and recall the relevant aspects of known algorithms for the problem.
+
+\begin{definition}[Bounded-distance decoding with discrete Gaussian samples]
+  \label{def:BDDwDGS}
+  For a lattice~$\calL \subset \RR^{n}$ and positive reals
+  $d < \lambda_{1}(\calL)/2$ and $r > 0$, an instance of the
+  \emph{bounded-distance decoding with discrete Gaussian samples}
+  problem $\BDDwDGS_{\calL,d,r}$ is a point $\bft \in \RR^{n}$ such that
+  $\dist(\bft,\calL) \leq d$, and access to an oracle that samples from
+  $D_{\calL^{*},s}$ for any (adaptively) queried $s \geq r$. The goal is
+  to output the (unique) lattice point $\bfv \in \calL$ closest to~$\bft$.
+\end{definition}
+
+\begin{remark}
+  \label{rem:BDDwDGS-param}
+  For a given distance bound~$d$, known $\BDDwDGS$ algorithms use
+  discrete Gaussian samples that all have the same width
+  parameter~$s$. However, the reduction to LWE will use the ability to
+  vary~$s$. Alternatively, we mention that when
+  $r \geq \eta_{\eps}(\calL^{*})$ for some very
+  small~$\eps > 0$ (which will always be the case in our setting),
+  we can replace the variable-width DGS oracle from
+  \autoref{def:BDDwDGS} with a fixed-width one that samples from
+  $D_{\bfw+\calL^{*},r}$ for any queried coset $\bfw+\calL^{*}$,
+  always for the same width~$r$.  This is because we can use the
+  latter oracle to implement the former one (up to statistical
+  distance $8\eps$), by sampling~$\bfe$ from the continuous
+  Gaussian of parameter $\sqrt{s^{2}-r^{2}}$ and then adding a sample
+  from $D_{\calL^{*}-\bfe,r}$. See~\cite[Theorem~3.1]{C:Peikert10} for
+  further details.
+\end{remark}
+
+The state-of-the-art algorithms for solving
+$\BDDwDGS$~\cite{DBLP:journals/jacm/AharonovR05,DBLP:conf/approx/LiuLM06,DBLP:conf/coco/DadushRS14}
+employ a certain $\calL$-periodic function
+$f_{\calL,1/r} \colon \RR^{n} \to [0,1]$, defined as
+\begin{equation}
+  \label{eq:f_L}
+  f_{\calL,1/r}(\bfx) := \frac{\rho_{1/r}(\bfx+\calL)}{\rho_{1/r}(\calL)} =
+  \E_{\bfw \sim D_{\calL^{*},r}}[\cos(2\pi \inner{\bfw, \bfx})] \enspace ,
+\end{equation}
+where the equality on the right follows from the Fourier series of
+$f_{\calL,1/r}$ (see~\cite{DBLP:journals/jacm/AharonovR05}).  To solve
+$\BDDwDGS$ for a target point~$\bft$, the algorithms use several
+discrete Gaussian samples $\bfw_{i} \sim D_{\calL^{*},r}$ to estimate
+the value of~$f_{\calL,1/r}$ at~$\bft$ and nearby points via
+\autoref{eq:f_L}, to ``hill climb'' from~$\bft$ to the nearest
+lattice point.  For the relevant points~$\bft$ we have the (very
+sharp) approximation
+\[ f_{\calL,1/r}(\bft) \approx \exp(-\pi r^{2} \cdot
+  \dist(\bft,\calL)^{2}) \enspace , \] so by the Chernoff-Hoeffding
+bound, approximating $f_{\calL,1/r}(\bft)$ to within (say) a factor of
+two uses at least
+\[ \frac{1}{f_{\calL,1/r}(\bft)^{2}} \approx \exp(2\pi r^{2} \cdot
+  \dist(\bft,\calL)^{2}) \] samples.\footnote{In fact, the algorithms
+  need approximation factors much better than two, so the required
+  number of samples is even larger by a sizable constant
+  factor. However, the above crude bound will be sufficient for our
+  purposes.}  Note that without enough samples, the ``signal'' of
+$f_{\calL,1/r}(\bft)$ is overwhelmed by measurement ``noise,'' which
+prevents the hill-climbing from making progress toward the answer.
+
+In summary, when limited to~$N$ discrete Gaussian samples, the known
+approaches to solving $\BDDwDGS$ are limited to distance
+\begin{equation}
+  \label{eq:dist-given-samples}
+  \dist(\bft, \calL) \leq r^{-1} \sqrt{\ln(N)/(2\pi)} \enspace .
+\end{equation}
+Having such samples does not appear to provide any speedup in
+decoding at distances that are larger than this bound by some constant factor
+greater than one.  In particular, if
+$d \cdot r \geq \omega(\sqrt{\log n})$ (which is the smoothing
+parameter of the integer lattice~$\bbZ$ for negligible error~$\eps$),
+then having $N=\text{poly}(n)$ samples does not seem to provide any
+help in solving $\BDDwDGS_{\calL,d,r}$ (versus having no samples at
+all).
+
+% CJP: don't need this because maximizing the decoding *distance* is
+% not relevant to the reduction to LWE (the BDD distance we use in the
+% reducing is much smaller than what can be decoded in principle).
+% Instead, the *sample complexity* of the BDD algorithms (vs the
+% reduction) is our main concern.
+
+% The state of the art for solving $\BDDwDGS$ is~\cite{DRS}, which
+% obtains a very sharp (non-asymptotic) bound on the decoding distance,
+% along with a sufficiently tight lower bound on the number of discrete
+% Gaussian samples used.
+
+% \begin{theorem}[{{\cite[Theorem~3.1, generalized]{DRS}}}]
+%   \label{thm:DRS-BDDwDGS}
+%   Fix a lattice $\calL \subset \RR^{n}$ and some positive
+%   $\eps < 1/200$, and let
+%   $d_{\eps} = \sqrt{\ln(2(1+1/\eps))/\pi}$ and
+%   $\delta_{\max} = \tfrac12 - \tfrac{2}{\pi d_{\eps}^{2}}$.  Then
+%   for any $r \geq \eta_{\eps}(\calL^{*})$, there is an algorithm that
+%   solves $\BDDwDGS_{\calL,d,r}$ for distance bound
+%   $d = \delta_{\max} d_{\eps} / r$, using
+%   $N > \ln (1/\eps)/\sqrt{\eps}$ samples from $D_{\calL^{*},r}$.
+% \end{theorem}
+
+% \begin{remark}
+%   \label{rem:DRS-BDDwDGS}
+%   The above statement generalizes the equality
+%   $r = \eta_{\eps}(\calL^{*})$ in~\cite{DRS} to a lower bound, which
+%   simply replaces $\eta_{\eps}(\calL^{*})$ with~$r$ in the denominator
+%   of the distance bound~$d$. \cpnote{More about why this change is
+%     justified.  The decoding distance comes from the analysis of
+%     gradient ascent on $f_{\calL}$ itself, ignoring its approximation via
+%     samples.  The number of samples comes from the approximation of
+%     $f_{\calL}$ and its gradient: DGS shows that
+%     $f_{\calL}(\bft) \approx \eps^{1/4}$ for $\bft$ within the
+%     distance bound, hence $1/\sqrt{\eps}$ samples are needed for
+%     the approximation, by Chernoff.}
+% \end{remark}
+
+% For example, if we let $\eps = 2^{-256}$ so that the algorithm
+% needs $N > 2^{128}$ discrete Gaussian samples and hence steps of
+% computation (even ignoring the second-order terms), then the decoding
+% radius $d < 3.681/r$.  This suggests the following:
+
+% \begin{conjecture}
+%   \label{con:BDDwDGS-hard}
+%   $\BDDwDGS_{\calL,d,r}$ is concretely infeasible in the worst case for
+%   any $d \geq 4/r$ and any not-too-large
+%   $r \geq \eta_{2^{-256}}(\calL^{*})$.\footnote{The ``not too large''
+%     qualifier is needed here because $\BDD$ is easy for the very small
+%     distance bound $2^{-n} \cdot \lambda_{1}(\calL)$, using LLL.}
+% \end{conjecture}
+
+
+
+\paragraph{Reduction from \BDDwDGS to LWE.}
+
+We now recall the following result from~\cite{STOC:PeiRegSte17},
+which generalizes a key theorem from~\cite{Reg09} to give a reduction
+from $\BDDwDGS$ to the LWE decision problem.
+
+\begin{theorem}[{{$\BDDwDGS$ hard $\implies$ decision-LWE hard
+      \cite[Lemma~5.4]{STOC:PeiRegSte17}}}]
+  \label{thm:bddwdgs-to-dlwe}
+  Let $\eps = \eps(n)$ be a negligible function and let
+  $m=\text{poly}(n)$ and $C=C(n) > 1$ be arbitrary.  There is a
+  probabilistic polynomial-time (classical) algorithm that, given
+  access to an oracle that solves $\DLWE_{n,m,q,\alpha}$ with
+  non-negligible advantage and input a number $\alpha \in (0,1)$, an
+  integer $q \geq 2$, a lattice $\calL \subset \RR^{n}$, and a
+  parameter $r \geq C q \cdot \eta_{\eps}(\calL^{*})$, solves
+  $\BDDwDGS_{\calL,d,r}$ using $N=m \cdot \text{poly}(n)$ samples,
+  where $d = \sqrt{1-1/C^{2}} \cdot \alpha q/r$.
+\end{theorem}
+
+\begin{remark}
+  \label{rem:PRS-generalized}
+  The above statement generalizes the fixed choice of $C=\sqrt{2}$ in
+  the original statement (inherited from~\cite[Section~3.2.1]{Reg09}),
+  using~\cite[Corollary~3.10]{Reg09}. In particular, for any constant
+  $\delta > 0$ there is a constant $C > 1$ such that
+  $d = (1-\delta) \cdot \alpha q / r$.
+\end{remark}
+% justification: the inner product of the discrete Gaussian with the
+% BDD error has param \sqrt{1-1/C^2} alpha q, so we need to add
+% (alpha q/C) "smoothing" error. This corresponds to adding a
+% continuous Gaussian with param
+% alpha q/(C d) = r / (C sqrt(1-1/C^2)) = r / sqrt(C^2-1)
+% to the discrete Gaussian of param r \geq C q eta.
+% This works out with the harmonic mean requirement on the
+% discrete+continuous lemma (Claim 3.9 of Regev).
+
+
+In particular, by \autoref{eq:dist-given-samples}, if the
+Gaussian parameter $\alpha q$ of the LWE error sufficiently exceeds
+$\sqrt{\ln(N)/(2\pi)}$ (e.g., by a constant factor greater than one),
+then the $\BDDwDGS_{\calL,d,r}$ problem is plausibly hard (in the
+worst case), hence so is the corresponding LWE problem from
+\autoref{thm:bddwdgs-to-dlwe} (on the average).  An interesting
+direction is to obtain a more precise bound on, and improve, the
+``sample overhead'' of the reduction, i.e., the $\text{poly}(n)$
+factor connecting the number of LWE samples~$m$ and the number of DGS
+samples~$N$.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

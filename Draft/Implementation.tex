@@ -1,0 +1,352 @@
+\section{Implementation and performance analysis}%
+\label{sec:performance}
+
+\ifshoworiginal
+The submission package includes:
+\begin{itemize}
+\item a reference implementation written exclusively in Python,
+\item a reference implementation written exclusively in portable C,
+\item an optimized implementation written exclusively in portable C that includes efficient algorithms to generate the matrix $\bfA$ and to compute the matrix operations $\bfA \bfS + \bfE$ and $\bfS' \bfA + \bfE'$, and
+\item an additional, optimized implementation for x64 platforms that exploits Advanced Vector Extensions~2 (AVX2) intrinsic instructions.
+\end{itemize}
+
+The implementations in the submission package support all three security levels and both variants of matrix generation:
+$\FrodoKEMLOneAES$, $\FrodoKEMLOneSHAKE$, $\FrodoKEMLThreeAES$, $\FrodoKEMLThreeSHAKE$, $\FrodoKEMLFiveAES$, and $\FrodoKEMLFiveSHAKE$. 
+The only difference between the reference and the optimized implementation is that the latter includes two efficient functions to generate the public matrix $\bfA$ and to compute the matrix operations $\bfA \bfS + \bfE$ and $\bfS' \bfA + \bfE'$. Similarly, the only difference between the optimized and the additional implementation is that the latter uses AVX2 intrinsic instructions to speed up the implementation of the aforementioned functions. 
+Hence, the different implementations share most of their codebase: this illustrates the simplicity of software based on $\FrodoKEM$. 
+
+\else
+
+An important feature of \FrodoKEM is that it is easy to implement and naturally facilitates
+writing implementations that are compact and run in constant-time.
+This latter feature aids to avoid common cryptographic implementation mistakes which can lead
+to key-extraction based on, for instance, timing differences when executing the code.\footnote{Nonetheless,
+care must be taken to avoid timing leaks. In 2020, Guo, Johansson, and Nilsson~\cite{C:GuoJohNil20}
+demonstrated a key-recovery attack on the reference implementation in the Round 2 submission of \FrodoKEM
+by exploiting branching in the computation of $\ssk$ in \FrodoKEM.\Decaps. This attack can be avoided
+by ensuring the implementation reads both $\bfk'$ and $\bfs$, compares $\bfB' \| \bfC$ and $\bfB'' \| \bfC'$
+in a constant-time way that avoids early termination, and sets $\overline{\bfk}$ using data-independent evaluation.}
+
+Our compact implementation of the \FrodoKEM scheme consists of slightly more than 250 lines of plain C code.\footnote{Our reference and optimized implementations in C are available as part of this submission here: \url{https://doi.org/10.5281/zenodo.14633189}.}
+This same code is used for all three security levels to implement \FrodoKEMLOne, \FrodoKEMLThree, and \FrodoKEMLFive,
+with parameters changed by a small number of macros at compile-time.
+Moreover, most of the code is either shared or reused for our implementation of \eFrodoKEM.
+We remark that the separation in two implementations, one for \FrodoKEM and one for \eFrodoKEM, is only
+done to provide a simpler and cleaner codebase supporting each API. 
+In particular, the API for \eFrodoKEM has been customized to perform a \emph{single} key generation
+per encapsulation execution.    
+
+Computing on matrices---the basic operation in \FrodoKEM---allows for easy scaling to different dimensions $n$.
+In addition, \FrodoKEM uses a modulus $q$ that is always equal or less than $2^{16}$. These two combined
+aspects allow for the full reuse of the matrix functions for the different security levels by instantiating them
+with the right parameters at build time. Since the modulus $q$ used is always a power of two, implementing
+arithmetic modulo $q$ is simple, efficient and easy to do in constant-time in modern computer architectures:
+for instance, computing modulo $2^{16}$ comes for free when using 16-bit data-types. Moreover, the dimension
+values were chosen to be divisible by 16 in order to facilitate vectorization optimizations and to simplify the
+use of $\AESOneTwoEight$ for the generation of the matrix $\bfA$.
+
+Also the error sampling is designed to be simple and facilitates code reuse: for any security level, \FrodoKEM
+requires 16 bits per sample, and the tables $T_\chi$ corresponding to the discrete cumulative density functions
+always consist of values that are less than $2^{15}$. Hence, a simple function applying inversion sampling
+(see~\autoref{alg:samplechi}) can be instantiated using precomputed tables $T_\chi$. Moreover, due to
+the small sizes of these precomputed tables constant-time table lookups, needed to protect against attacks
+based on timing differences, can be implemented almost for free in terms of effort and performance impact.
+\fi
+
+All our implementations avoid the use of secret address accesses and secret branches and, hence,
+are protected against timing and cache attacks at the software level.
+
+
+\subsubsection{Performance analysis on x64 Intel}\label{sec:results_x64}
+
+\ifshoworiginal
+In this section, we summarize the results of our performance evaluation using a machine equipped with a 3.4GHz Intel Core i7-6700 (Skylake) processor and running Ubuntu 16.04.3 LTS. As standard practice, TurboBoost was disabled during the tests. For compilation we used GNU GCC version 7.2.0 with the command {\tt gcc -O3 -march=native}. 
+The generation of the matrix $\bfA$ is the most expensive part of the computation. As described in \autoref{sec:spec:genA}, we support two ways of generating $\bfA$: one using $\AESOneTwoEight$ and one using $\SHAKE128$.
+
+
+\subsubsection{Performance using AES128}\label{sec:results_aes}
+
+\autoref{tab:results_x64_aes} details the performance of the optimized implementations and the additional x64 implementations when using $\AESOneTwoEight$ for the generation of the matrix $\bfA$. The top two sets of results correspond to performance when using OpenSSL's AES implementation\footnote{Note that in order to enable AES-NI instructions in OpenSSL, we use the \texttt{EVP\_aes\_128\_ecb} interface in OpenSSL.} and the bottom set presents the results when using a standalone AES implementation using Intel's Advanced Encryption Standard New Instructions (AES-NI).
+
+As can be observed, the different implementation variants have similar performance, even when using hand-optimized AVX2 intrinsic instructions. This illustrates that $\FrodoKEM$'s algorithms, which are mainly based on matrix operations, facilitate automatic parallelization using vector instructions. Hence, the compiler is able to achieve close to ``optimal'' performance with little intervention from the programmer.
+The best results for $\FrodoKEMLOneAES$, $\FrodoKEMLThreeAES$ and $\FrodoKEMLFiveAES$ (i.e., 0.93~ms, 1.75~ms and 2.91~ms, respectively, obtained by adding the times for encapsulation and decapsulation) are achieved by the additional implementation using AVX2 intrinsics. However, the difference in performance between the different implementations reported in \autoref{tab:results_x64_aes} is, in all the cases, less than~0.5\%.
+
+We note that the performance of $\FrodoKEM$ using AES on Intel platforms greatly depends on AES-NI instructions. For example, when turning off the use of these instructions the computing cost of the optimized implementation of $\FrodoKEMLOneAES$ (resp.,~$\FrodoKEMLThreeAES$) is 26.4~ms (resp.,~60.9~ms), which is roughly a 28-fold (resp.,~35-fold) degradation in performance.
+
+
+\begin{table}[t]
+\caption{\textbf{Performance (in thousands of cycles) of $\FrodoKEM$ on a 3.4GHz Intel Core i7-6700 (Skylake) processor with matrix $\bfA$ generated using $\AESOneTwoEight$.} Results are reported using OpenSSL's AES implementation and using a standalone AES implementation, all of which exploit AES-NI instructions. Cycle counts are rounded to the nearest $10^3$ cycles.
+\patrick{POSSIBLY, UPDATE RESULTS.}}\label{tab:results_x64_aes}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.4cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c c c|c}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}}     &     \multirow{2}{*}{\textbf{KeyGen}}      &    \multirow{2}{*}{\textbf{Encaps}}   &    \multirow{2}{*}{\textbf{Decaps}}   &    \textbf{Total}        \\ 
+                                                       &                                                            &                                                         &                                                       &    \textbf{(Encaps + Decaps)}   \\
+\midrule
+\multicolumn{5}{l}{\bf Optimized Implementation (AES from OpenSSL)} \\
+\midrule
+$\FrodoKEMLOneAES$                               &            1,389                &            1,637                   &                 1,534         &                3,171             \\
+$\FrodoKEMLThreeAES$                             &            2,831                &            3,047                   &                 2,904       &                5,951             \\
+$\FrodoKEMLFiveAES$                             &            4,775                &            5,063                   &                 4,840       &                 9,903             \\
+\midrule
+\multicolumn{5}{l}{\bf Additional implementation using AVX2 intrinsic instructions (AES from OpenSSL)} \\
+\midrule
+$\FrodoKEMLOneAES$                               &            1,387                &            1,634                   &                 1,531       &                3,165             \\
+$\FrodoKEMLThreeAES$                             &            2,846                &            3,047                   &                2,894       &                5,941             \\
+$\FrodoKEMLFiveAES$                             &            4,779                &            5,051                   &                 4,849       &                 9,900             \\
+\midrule
+\multicolumn{5}{l}{\bf Additional implementation using AVX2 intrinsic instructions (standalone AES)} \\
+\midrule
+$\FrodoKEMLOneAES$                               &            1,398                &            1,644                   &                 1,540       &                3,184             \\
+$\FrodoKEMLThreeAES$                             &            2,874                &            3,054                   &                 2,908       &                5,962             \\
+$\FrodoKEMLFiveAES$                             &            4,765                &            5,069                   &                 4,867       &                9,936             \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsubsection{Performance using SHAKE128}\label{sec:results_shake}
+
+\autoref{tab:results_x64_shake} outlines the performance figures of the optimized implementations and the additional x64 implementations when using $\SHAKE128$ for the generation of the matrix $\bfA$. 
+The top set of results shows the performance of the optimized implementation written in C only, while the bottom set presents the results when using a 4-way implementation of SHAKE using AVX2 instructions (``SHAKE4x using AVX2'').
+Note that the use of such a vectorized implementation of SHAKE is necessary to boost the practical performance. In our use-case, it results in a two-fold speedup when compared to the version using a SHAKE implementation written in plain C.
+
+Comparing \autoref{tab:results_x64_aes} and \autoref{tab:results_x64_shake}, $\FrodoKEM$ using AES, when implemented with AES-NI instructions, is around 2.6--3.1$\times$ faster than the vectorized SHAKE implementation. Nevertheless, this comparative result could change drastically if hardware-accelerated instructions such as AES-NI are not available on the targeted platform, or if support for hardware-accelerated instructions for SHA-3 is added in the future. 
+
+
+\begin{table}[t]
+\caption{\textbf{Performance (in thousands of cycles) of $\FrodoKEM$ on a 3.4GHz Intel Core i7-6700 (Skylake) processor with matrix $\bfA$ generated using $\SHAKE128$.} Results are reported for two test cases: (i) using a SHAKE implementation written in plain C and, (ii) using a 4-way implementation of SHAKE using AVX2 instructions. Cycle counts are rounded to the nearest $10^3$ cycles.}\label{tab:results_x64_shake}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.4cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c c c|c}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}} & \multirow{2}{*}{\textbf{KeyGen}} & \multirow{2}{*}{\textbf{Encaps}} & \multirow{2}{*}{\textbf{Decaps}} & \textbf{Total}             \\ 
+                                 &                                  &                                  &                                  & \textbf{(Encaps + Decaps)} \\ 
+\midrule
+\multicolumn{5}{l}{\bf Optimized Implementation (plain C SHAKE)} \\
+\midrule
+$\FrodoKEMLOneSHAKE$            &           7,649                  &           7,847                  &                7,743             &              15,590        \\
+$\FrodoKEMLThreeSHAKE$          &          16,874                  &          17,101                  &               16,971           &              34,072        \\
+$\FrodoKEMLFiveSHAKE$          &          30,465                  &          30,626                  &               30,451             &              61,077        \\
+\midrule
+\multicolumn{5}{l}{\bf Additional implementation using AVX2 intrinsics (SHAKE4x using AVX2)} \\
+\midrule
+$\FrodoKEMLOneSHAKE$            &           4,031                  &           4,218                  &                4,116             &               8,334        \\
+$\FrodoKEMLThreeSHAKE$          &           8,599                  &           8,799                  &                8,659             &              17,458        \\
+$\FrodoKEMLFiveSHAKE$          &          15,067                  &          15,338                  &               15,170             &              30,508        \\
+\bottomrule
+\end{tabular}
+\end{table}
+\fi
+
+\autoref{tab:results_x64} summarizes the results of our performance evaluation using a machine equipped
+with a 3.2GHz Intel Core i7-8700 (Coffee Lake) processor and running Ubuntu 22.04.2 LTS. Following standard practice,
+TurboBoost was disabled during the tests. For compilation we used GNU GCC version 15.0.1 with the command
+{\tt gcc -O3 -march=native}. 
+%The generation of the matrix $\bfA$ is the most expensive part of the computation. As described in
+%\autoref{sec:spec:genA}, we support two ways of generating $\bfA$: one using $\AESOneTwoEight$ and
+%one using $\SHAKE128$.
+
+For the case of generating the matrix $\bfA$ using $\AES128$, we present the results when using
+an AES implementation that exploits the cryptographic extension set AES-NI.
+The corresponding running times for $\FrodoKEMLOneAES$, $\FrodoKEMLThreeAES$ and $\FrodoKEMLFiveAES$ are
+0.67~ms, 1.28~ms and 2.17~ms, respectively, obtained by adding the times for encapsulation and decapsulation.
+This performance is expected to be typical in static key exchange applications where the cost of key generation
+is amortized across many key encapsulation executions. 
+For the full KEM, the running times are 0.97~ms, 1.91~ms and 3.22~ms, respectively. 
+These timings roughly match the cost of \eFrodoKEM in an ephemeral setting (the overhead is about 1\% or less).
+
+Our implementation also includes the optional use of AVX2 intrinsic instructions. In our experiments, we observed that
+this optimization offers a very small performance improvement compared to the plain C implementation. 
+This illustrates that $\FrodoKEM$'s algorithms, which are mainly based on matrix operations, facilitate
+automatic parallelization using vector instructions. Hence, the compiler is able to achieve close to ``optimal''
+performance with little intervention from the programmer.
+
+We note that the performance of $\FrodoKEM$ using AES on Intel platforms greatly depends on AES-NI instructions.
+For example, when turning off the use of these instructions the computing cost of the optimized implementations
+suffers a more than 20-fold increase.
+
+\autoref{tab:results_x64} also outlines the performance figures of our implementation when using $\SHAKE128$
+for the generation of $\bfA$. 
+In this case, we use a 4-way implementation of SHAKE that exploits AVX2 instructions.
+In our tests, we observed that this approach results in a two-fold speedup when compared to a version using a SHAKE implementation
+written in plain C.  
+%The middle set of results shows the performance of the implementation written in C only, while the bottom
+%set presents the results when using a 4-way implementation of SHAKE using AVX2 instructions.
+%Note that the use of such a vectorized implementation of SHAKE is necessary to boost the practical performance.
+%In our use-case, it results in a two-fold speedup when compared to the version using a SHAKE implementation
+%written in plain C.
+
+Comparing the use of $\AESOneTwoEight$ and $\SHAKE128$, $\FrodoKEM$ using AES, when implemented with AES-NI instructions,
+is around 3$\times$ faster than $\FrodoKEM$ using SHAKE with a vectorized implementation. Nevertheless, this comparative
+result may change drastically if hardware-accelerated instructions such as AES-NI are not available on the
+targeted platform, or if support for hardware-accelerated instructions for SHA-3 is added in the future. 
+
+\begin{table}[t]
+\caption{Performance (in thousands of cycles) of $\FrodoKEM$ on a 3.2GHz Intel Core i7-8700 (Coffee Lake) processor.
+For the variants using $\AESOneTwoEight$, results are reported using an AES implementation that exploits AES-NI instructions. 
+For the variants using $\SHAKE128$, results are reported using a 4-way vectorized implementation of SHAKE using AVX2 instructions.
+Cycle counts are rounded to the nearest $10^3$ cycles.}\label{tab:results_x64}
+\cpnote{see about using siunitx to get nicer display and alignment of numbers here and in other tables}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.25cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c c c|c}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}}     &     \multirow{2}{*}{\textbf{KeyGen}}      &    \multirow{2}{*}{\textbf{Encaps}}   &    \multirow{2}{*}{\textbf{Decaps}}   &    \textbf{Total}        \\ 
+                                   &                                             &                                       &
+                                   &    \textbf{(Encaps + Decaps)}   \\
+\midrule
+\multicolumn{5}{l}{\bf AES using AES-NI} \\
+\midrule
+$\FrodoKEMLOneAES$                               &            938                &            1,105                   &                 1,044         &                2,149             \\
+$\FrodoKEMLThreeAES$                             &            2,017                &            2,105                   &                 1,983       &                4,088             \\
+$\FrodoKEMLFiveAES$                             &            3,353                &            3,597                   &                 3,326       &                 6,923             \\
+%\midrule
+%\multicolumn{5}{l}{\bf Plain C SHAKE} \\
+%\midrule
+%$\FrodoKEMLOneSHAKE$            &           7,649                  &           7,847                  &                7,743             &              15,590        \\
+%$\FrodoKEMLThreeSHAKE$          &          16,874                  &          17,101                  &               16,971           &              34,072        \\
+%$\FrodoKEMLFiveSHAKE$          &          30,465                  &          30,626                  &               30,451             &              61,077        \\
+\midrule
+\multicolumn{5}{l}{\bf Vectorized SHAKE using AVX2} \\
+\midrule
+$\FrodoKEMLOneSHAKE$            &           2,806                  &           2,941                  &                2,877             &               5,818        \\
+$\FrodoKEMLThreeSHAKE$          &           6,026                  &           6,096                  &                5,994             &              12,090        \\
+$\FrodoKEMLFiveSHAKE$          &          10,725                  &          10,643                &               10,497             &              21,140        \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsubsection{Performance analysis on ARM}\label{sec:results_arm}
+
+\ifshoworiginal
+In this section, we summarize the results of our performance evaluation using a device powered by a 1.992GHz 64-bit ARM Cortex-A72 (ARMv8) processor and running Ubuntu 16.04.2 LTS. For compilation we used GNU GCC version 5.4.0 with the command {\tt gcc -O3 -march=native}. 
+
+\autoref{tab:results_arm} details the performance of the optimized implementations when using $\AESOneTwoEight$ and $\SHAKE128$. Similar to the case of the x64 Intel platform, the overall performance of $\FrodoKEM$ is highly dependent on the performance of the primitive that is used for the generation of the matrix $\bfA$. Hence, the best performance in this case is achieved when using OpenSSL's AES implementation, which exploits the efficient NEON engine. On the other hand, $\SHAKE$ performs significantly better when there is no support for specialized instructions in the targeted platform: using a plain C version of $\SHAKE$ is more than 3 times faster than using a plain C version of AES.
+
+\else
+
+\autoref{tab:results_arm} details the performance of our implementations on a device powered by a 1.992GHz 64-bit ARM Cortex-A72 (ARMv8)
+processor and running Ubuntu 24.04.2 LTS.
+We provide three options which, again, are determined by the way we generate matrix $\bfA$. The first option uses OpenSSL's AES engine for implementing and accelerating $\AES128$ with the AES cryptographic extensions available on the targeted ARMv8 processor. This implementation uses OpenSSL version 3.0.13 and was compiled with GNU GCC version 14.2.0.
+The other two options use plain C implementations of AES and SHAKE for generating $\bfA$ with $\AES128$ and $\SHAKE128$, respectively. 
+For these cases, we use OpenSSL version 3.0.2 and compiled the implementations with GNU GCC version 13.1.0.
+For all the options we used the command {\tt gcc -O3 -march=native}. 
+Similar to the case of the x64 Intel platform, the overall performance of $\FrodoKEM$ is highly
+dependent on the performance of the primitive that is used for the generation of the matrix $\bfA$.
+Hence, the best performance in this case is achieved when using an AES implementation that
+exploits the hardware acceleration provided by the ARMv8 cryptographic extensions.
+The respective running times for the full KEM are 4.98~ms, 9.99~ms and 17.24~ms for $\FrodoKEMLOneAES$, $\FrodoKEMLThreeAES$ and $\FrodoKEMLFiveAES$, respectively
+(as above, these timings only have a negligible overhead in comparison to the cost of \eFrodoKEM in an ephemeral setting).
+On the other hand, $\SHAKE$ performs significantly better when
+there is no support for specialized instructions in the targeted platform: using a plain C version
+of $\SHAKE$ is more than 3$\times$ faster than using a plain C version of AES.
+\fi
+
+\begin{table}[t]
+\caption{Performance (in thousands of cycles) of $\FrodoKEM$ on a 1.992GHz 64-bit ARM Cortex-A72 (ARMv8) processor. Results are reported for three test cases: (i) using an AES implementation exploiting cryptographic extensions, (ii) using an AES implementation written in plain C, and (iii) using a $\SHAKE$ implementation written in plain C. Results have been scaled to cycles using the nominal processor frequency. Cycle counts are rounded to the nearest $10^3$ cycles.}\label{tab:results_arm}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.25cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c c c|c}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}}     &     \multirow{2}{*}{\textbf{KeyGen}}      &    \multirow{2}{*}{\textbf{Encaps}}   &    \multirow{2}{*}{\textbf{Decaps}}   &    \textbf{Total}        \\ 
+                                                       &                                                            &                                                         &                                                       &    (Encaps + Decaps)   \\
+\midrule
+\multicolumn{5}{l}{\bf AES using cryptographic extensions} \\
+\midrule
+$\FrodoKEMLOneAES$                               &            3,109                &            3,402                   &                 3,414         &                6,816             \\
+$\FrodoKEMLThreeAES$                             &            6,515                &            6,702                   &                6,678       &                13,380             \\
+$\FrodoKEMLFiveAES$                             &            11,010                &            11,796                   &                11,527       &                23,323             \\
+\midrule
+\multicolumn{5}{l}{\bf Plain C AES} \\
+\midrule
+$\FrodoKEMLOneAES$                               &            47,776                &           48,007                   &               47,958       &              95,965             \\
+$\FrodoKEMLThreeAES$                             &         109,922                &         110,695                   &             110,387       &               221,082             \\
+$\FrodoKEMLFiveAES$                             &            207,752                &           209,724                   &                209,164       &               418,888             \\
+\midrule
+\multicolumn{5}{l}{\bf Plain C SHAKE} \\
+\midrule
+$\FrodoKEMLOneSHAKE$                               &            11,902                &           12,197                   &               12,219       &               24,416             \\
+$\FrodoKEMLThreeSHAKE$                             &            26,334                &           26,618                   &               26,713       &               53,331             \\
+$\FrodoKEMLFiveSHAKE$                             &            47,506                &            48,169                   &                48,505       &                96,674             \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Comparison with other algorithms}\label{sec:comparison}
+
+In this section, we compare the performance profile of \FrodoKEM with two other quantum-safe KEMs
+that are also expected to be deployed and adopted for real-world applications:
+CRYSTALS-Kyber~\cite{EuroSP:Kyber}, which was recently standardized by NIST as ML-KEM~\cite{MLKEM}, and
+Classic McEliece~\cite{CME}, which is a Round 4 candidate in the NIST Post-Quantum Cryptography standardization project~\cite{NIST17}. 
+As stated before, these two KEMs, alongside \FrodoKEM, are currently undergoing standardization by ISO.
+
+
+\begin{table}[t]
+\caption{Performance comparison of \FrodoKEM with two other algorithms: CRYSTALS-Kyber and Classic McEliece.
+The results for \FrodoKEM were obtained on a 3.2GHz Intel Core i7-8700 (Coffee Lake) processor,
+while the results for CRYSTALS-Kyber and Classic McEliece are taken from~\cite{SUPERCOP} (version {\tt supercop-20241022}), corresponding to a
+3.0GHz Intel Core i3-8109U (Coffee Lake) processor.
+For \FrodoKEM we present results for the variant using $\AESOneTwoEight$, and for Classic McEliece we use the fast (f) variants. 
+Cycle counts are rounded to the nearest $10^3$ cycles.}\label{tab:comparison}
+\scriptsize
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.25cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|r r|r r r|r}
+\toprule
+\multirow{2}{*}{\textbf{Scheme}}     & \multicolumn{2}{c|}{\textbf{Sizes (in bytes)}} &     \multicolumn{3}{c|}{\textbf{Cycles ($\times 10^3$)}}                     &    \multirow{2}{*}{\textbf{Total}}  \\ 
+\cmidrule(lr){2-3} \cmidrule(lr){4-6}
+                                     & \textbf{public key} & \textbf{ciphertext}      &      \textbf{KeyGen}       &    \textbf{Encaps}     &    \textbf{Decaps}     &                                     \\
+\midrule
+\multicolumn{7}{l}{\bf NIST security level 1} \\
+\midrule
+Kyber512                             &       800  &    768          &             23                &               36                   &                    28         &                   87             \\
+$\FrodoKEMLOneAES$                   &     9,616  &  9,752          &            957                &            1,134                   &                 1,059         &                3,150             \\
+{\tt mceliece348864f}                &   261,120  &     96          &         30,381                &               30                   &                   118         &               30,529             \\
+\midrule
+\multicolumn{7}{l}{\bf NIST security level 3} \\
+\midrule
+Kyber678                             &     1,184  &  1,088          &               39              &               53                   &                    42         &                  134             \\
+$\FrodoKEMLThreeAES$                 &    15,632  & 15,792          &            2,043              &            2,125                   &                 2,042         &                6,210             \\
+{\tt mceliece460896f}                &   524,160  &    156          &           97,899              &               64                   &                   245         &               98,208             \\
+\midrule
+\multicolumn{7}{l}{\bf NIST security level 5} \\
+\midrule
+Kyber1024                            &     1,568  &  1,568          &               55              &               75                   &                    62         &                  192             \\
+$\FrodoKEMLFiveAES$                  &    21,520  & 21,696          &            3,432              &            3,609                   &                 3,471         &               10,512             \\
+{\tt mceliece6960119f}               & 1,047,319  &    194          &          195,984              &              120                   &                   287         &              196,391             \\
+\bottomrule
+\end{tabular}
+\end{table}
+   
+
+\autoref{tab:comparison} illustrates that CRYSTALS-Kyber offers the best performance in terms of both speed and bandwidth. 
+\FrodoKEM's sizes and runtimes are, across the board, more than an order of magnitude larger and slower, respectively, compared to Kyber's.
+These results were key in motivating NIST's selection of CRYSTALS-Kyber as the preferred drop-in replacement for most applications.
+
+However, for security-sensitive applications, it can be argued that Classic McEliece provides a more relevant comparison to \FrodoKEM.
+In this case, the significantly larger public key sizes of Classic McEliece, which exceed \FrodoKEM's by more than an order of magnitude,
+may render it impractical for many use cases.
+Similarly, the high computational cost of the full Classic McEliece protocol presents additional challenges.
+For example, the runtime of Classic McEliece at NIST level 5 is approximately 65.5~ms on a server-class processor (compare to \FrodoKEM's 3.29~ms). 
+Nonetheless, Classic McEliece offers an advantage in certain static key exchange scenarios in which its substantial key generation cost
+can be amortized over multiple key encapsulation executions.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

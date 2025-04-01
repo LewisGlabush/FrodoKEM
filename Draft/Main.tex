@@ -1,0 +1,254 @@
+% IACR Communications in Cryptology template file
+% This file shows how to use the iacrcc class to write a paper.
+
+%% Document mode
+% [version=xxx] where xxx is preprint, submission, or final. The default is preprint.
+%               version=submission puts line numbers into the document and makes it
+%               anonymous (which can be overridden).
+%               version=final is for submitting the final version. This requires a license
+%               to be specified and must be compiled with lualatex.
+% [notanonymous]  Keep author names in submission mode
+%% Package options
+% [floatrow]      Load floatrow package with correct captions
+% [biblatex]      Use the biblatex package instead of bibtex. Note that options
+%                 may not be passed to biblatex at this time.
+
+% Uncomment the next line if you have TeX Live 2021 or later
+% and want to produce a PDF which complies with the PDF/A-2U standard
+%\DocumentMetadata{pdfstandard=a-2u}
+\documentclass[version=submission]{iacrcc}
+
+% When the *final* document mode is used
+% the authors need to provide a supported license.
+% In all other modes this information is ignored.
+% The currently provided ones are { CC-by }
+\license{CC-by}
+
+% Include LaTeX packages required by your paper
+
+\newif\ifhidetodos
+\hidetodosfalse
+%\hidetodostrue
+\input{common}
+
+% Hide original text from specifications document
+\newif\ifshoworiginal
+%\showoriginaltrue
+\showoriginalfalse
+
+% Hide text for anonymous submission
+\newif\iffullversion
+%\fullversiontrue
+\fullversionfalse
+
+% Provide the title of the paper
+% This should look like:
+\title[running  = {FrodoKEM: A CCA-Secure Learning With Errors Key Encapsulation Mechanism}]
+                  {FrodoKEM: A CCA-Secure Learning With Errors Key Encapsulation Mechanism}
+% Where the options in square brackets “[ ]” are optional and control the following:
+% running: the running title displayed in the headers
+
+% Define authors and affiliations
+% Authors are listed individually using the \addauthor tag followed by a list of affiliations.
+% The idea is that every author makes a separate call to this command.
+% This should look like:
+% \addauthor[inst      = {1,2},
+%            orcid     = 0000-0000-0000-0000,
+%            footnote  = {Thanks to my supervisor for the support.},
+%            onclick   = {https://www.mypersonalwebpage.com}
+%           ]{Alice Accomplished}
+% Where the options in square brackets “[ ]” are optional 
+% and control the following:
+% inst:     a numerical list pointing to the index of the institution 
+%           in the affiliation array.
+% orcid:    create a small clickable orcid logo next to the authors name 
+%           linking to the authors ORCID iD see: orcid.org.
+% footnote: create an author-specific footnote.
+% onclick:  define what to do when clicking on the external link logo
+%           next to the author name: e.g., can point to the academic webpage.
+% email:    define the e-mail address of this author.
+\iffullversion
+\addauthor[inst     = {1},
+%           footnote = {This is an example footnote.},
+           email    = {lewis.glabush@epfl.ch},
+           surname  = {Glabush}
+          ]{Lewis Glabush}
+\addauthor[inst     = {2},
+%           footnote = {This is an example footnote.},
+           email    = {plonga@microsoft.com},
+           surname  = {Longa}
+          ]{Patrick Longa}
+
+\addauthor[inst     = {3},
+%           footnote = {This is an example footnote.},
+           orcid    = 0000-0003-0419-7501,
+           email    = {cpeikert@umich.edu},
+           surname  = {Peikert},
+           onclick  = {https://web.eecs.umich.edu/~cpeikert/}
+          ]{Chris Peikert}
+\addauthor[inst     = {4},
+%           footnote = {This is an example footnote.},
+           email    = {dstebila@uwaterloo.ca},
+           surname  = {Stebila}
+          ]{Douglas Stebila}
+
+%\addauthor[inst    = {2},
+%           email   = {mccurley@digicrime.com},
+%           surname = {McCurley},
+%          ]{Kevin S. McCurley}
+
+% The following command controls the running header for authors
+% This is optional for <= 4 authors and mandatory for > 4 authors
+% \authorrunning{Joppe W. Bos and Kevin S. McCurley}
+
+% Affiliations are listed individually using the \addaffiliation command 
+% *after* the (list of) authors using \addauthor
+% This should look like (full example):
+% \addaffiliation[ror        = 05f950310,
+%                 department = {Computer Security and Industrial Cryptography},              
+%                 street     = {Kasteelpark Arenberg 10, box 2452},
+%                 city       = {Leuven},
+%                 state      = {Vlaams-Brabant},
+%                 postcode   = {3001},
+%                 country    = {Belgium}
+%                ]{KU Leuven}
+% Where the options in square brackets “[ ]” are optional and control 
+% the following (optional information is mainly used for meta-data collection):
+% ror:        provide the Research Organization Registry (ROR) identifier 
+%             for this affiliation (see: ror.org). This is used for meta-data 
+%             collection only.
+% department: department or suborganization name
+% street:     street address
+% city:       city name
+% state:      state or province name
+% postcode:   zip or postal code
+% country:    country name
+
+\addaffiliation[ 
+%                ror     = 031v4g827,
+%                street  = {Interleuvenlaan 80},
+                city    = {Lausanne},
+%                postcode= {3001},
+                country = {Switzerland}
+               ]{EPFL}
+\addaffiliation[ 
+%                ror     = 031v4g827,
+%                street  = {Interleuvenlaan 80},
+                city    = {Redmond},
+%                postcode= {3001},
+                country = {United States}
+               ]{Microsoft Research}
+\addaffiliation[ 
+%                ror     = 031v4g827,
+%                street  = {Interleuvenlaan 80},
+                city    = {Ann Arbour},
+%                postcode= {3001},
+                country = {United States}
+               ]{University of Michigan}
+\addaffiliation[ 
+%                ror     = 031v4g827,
+%                street  = {Interleuvenlaan 80},
+                city    = {Waterloo},
+%                postcode= {3001},
+                country = {Canada}
+               ]{University of Waterloo}
+\fi
+% Authors should use the \addfunding macro to make sure that funding agencies
+% can find papers published under their sponsorship.
+% You can use the online tool at
+% https://publish.iacr.org/funding
+% to help you find fundref and ror identifiers.
+% Note that \addfunding *does not* automatically create footnotes or
+% an acknowledgements section to identify funding - it only collects the
+% metadata for indexing.
+% An example is:
+
+% \addfunding[country  = {europe},
+%             grantid  = {1234},
+%             fundref = {100010661}
+%            ]{Horizon 2020 Framework Programme}
+
+% A footnote can be placed on the front page without a symbol / numbering using:
+%\genericfootnote{This is the full version of our paper published at XX}
+
+\begin{document}
+
+\listoffixmes
+
+\maketitle
+
+% Provide the keywords *before* the abstract
+% When keywords contain macros provide the text version as the optional argument
+\keywords{Post-Quantum Cryptography, Lattice Cryptography, Key Exchange, Multi-ciphertext security, Implementation}
+
+% Provide the abstract of your paper
+\begin{abstract}
+\plnote{Be careful when inserting notes. Some weird spacing shows up in the clean paper version when a blank space is left between a note and the text}
+\plnote{Remember to provide a text-only (no macros) abstract in the ``textabstract'' environment following this one, for the final version}
+  Large-scale quantum computers capable of implementing Shor's algorithm pose a significant threat to the security of the most widely used public-key cryptographic schemes.
+  This risk has motivated substantial efforts by standards bodies and government agencies to identify and standardize quantum-safe cryptographic systems.
+  Among the proposed solutions, lattice-based cryptography has emerged as the foundation for some of the most promising protocols.
+
+  This paper describes \FrodoKEM, a family of conservative key-encapsulation mechanisms (KEMs) whose security is based on generic, “unstructured” lattices.
+  \FrodoKEM is proposed as an alternative to the more efficient lattice schemes that utilize \emph{algebraically structured} lattices, such as the recently standardized ML-KEM scheme.
+  By relying on generic lattices, \FrodoKEM minimizes the potential for future attacks that exploit algebraic structures while enabling simpler and more compact implementations.
+  Our plain C implementations demonstrate that, despite its conservative design and parameterization, \FrodoKEM remains practical.
+  For instance, the full protocol at NIST security level 1 runs in approximately 0.97~ms on a server-class processor, and 4.98~ms on a smartphone-class processor.
+
+%The original version of FrodoKEM met it's security goal of single target IND-CCA security when submitted to the 2021 NIST post-quantum cryptography standardization project. However, there were concerns about security degradation when many keys would be generated for a single user. This turned out to be a generic problem for any KEM, built from the Fujisaki--Okamoto transform, that had a small message length. FrodoKEM now utilizes a new tool called the salted Fujisaki--Okamoto ($\SFO$) transform, which mitigates multi-challenge security degradation, without increasing the message length, and having a very small impact on performance. 
+
+  \FrodoKEM obtains (single-target) \INDCCA security using a variant of the Fujisaki--Okamoto transform, applied to an underlying public-key encryption scheme called \FrodoPKE.\@
+  In addition, using a new tool called the Salted Fujisaki--Okamoto ($\SFO$) transform, \FrodoKEM is also shown to \emph{tightly} achieve \emph{multi-challenge} security, without increasing the \FrodoPKE message length and with a negligible performance impact, based on the multi-challenge $\INDCPA$ security of \FrodoPKE.
+\end{abstract}
+
+
+\begin{textabstract}
+  For the final version of your paper, you will need a text-only abstract. Do
+  not use LaTeX macros inside this abstract.
+\end{textabstract}
+
+% The content of the paper starts here
+\input{Introduction}
+
+\input{Background}
+
+\input{Auxiliary_algorithms}
+
+\input{FrodoPKE}
+
+\input{FrodoKEM}
+
+\input{Security_main}
+
+\input{Parameters}
+
+\input{Implementation}
+
+
+%\section{Bibliography}
+%Citing papers is done in the usual way using BibTeX or \texttt{biblatex}
+%commands. For example: the RSA paper~\cite{RSA78}.
+
+%It is highly encouraged to use CryptoBib from \url{https://cryptobib.di.ens.fr}
+
+% This sample uses bibtex rather than biblatex.
+\bibliography{biblio, refs, ../cryptobib/abbrev1, ../cryptobib/crypto}
+
+% NOTES
+% - Download abbrev3.bib and crypto.bib from https://cryptobib.di.ens.fr/
+% - Use bilbio.bib for additional references not in the cryptobib database.
+%   If possible, take them from DBLP.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\appendix
+
+\input{Security_appendix}
+
+\input{Attacks}
+
+\end{document}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

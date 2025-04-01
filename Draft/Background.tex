@@ -1,0 +1,583 @@
+\section{Background}%
+\label{sec:background}
+
+This section defines the cryptographic primitives and security notions that
+are relevant to \FrodoPKE and \FrodoKEM, as well as the mathematical
+background required to analyze their security.
+
+\subsection{Notation}%
+\label{sec:notation}
+
+\ifshoworiginal
+We use the following notation:
+
+\begin{itemize}
+\item Vectors are denoted with bold lower-case letters (e.g.,
+  $\bfa, \bfb, \bfv$), and matrices are denoted with bold upper-case
+  letters (e.g., $\bfA, \bfB, \bfS$). For a set~$D$, the set of
+  $m$-dimensional vectors with entries in~$D$ is denoted by~$D^{m}$,
+  and the set of $m$-by-$n$ matrices with entries
+  in~$D$ is denoted by $D^{m \times n}$.
+\item For an $n$-dimensional vector $\bfv$, its $i$th entry for
+  $0\leq i < n$ is denoted by~$\bfv_i$.
+\item For an $m$-by-$n$ matrix~$\bfA$, its $(i,j)$th entry (i.e., the
+  entry in the $i$th row and $j$th column) for $0 \leq i <m$ and
+  $0 \leq j < n$ is denoted by~$\bfA_{i,j}$, and its $i$th row is
+  denoted by~$\bfA_i = (\bfA_{i,0},\bfA_{i,1},\ldots,\bfA_{i,n-1})$.
+\item The transpose of a matrix~$\bfA$ is denoted by $\bfA^\text{T}$.  
+\item An $m$-bit string $\bfk\in \set{0,1}^m$ is written as a vector over
+  the set $\{0,1\}$ and its $i$th bit for
+  $0 \leq i < m$ is denoted by~$\bfk_i$. 
+\item The ring of integers is denoted by $\bbZ$, and, for a positive
+  integer~$q$, the quotient ring of integers modulo~$q$ is denoted by
+  $\bbZ_q = \bbZ/q\bbZ$.
+\item For a probability distribution~$\chi$, the notation
+  $e \getsr \chi$ denotes drawing a value~$e$ according to~$\chi$.
+  The $n$-fold product distribution of~$\chi$ with itself is denoted
+  by~$\chi^{n}$.
+\item For a finite set~$S$, the uniform
+  distribution on~$S$ is denoted by~$U(S)$.
+\item The floor of a real number~$a$, i.e., the largest integer less
+  than or equal to $a$, is denoted by~$\floor{a}$.
+\item The closest integer to a real number~$a$ (with ties broken
+  upward) is denoted by $\round{a} = \floor{a+1/2}$.
+\item For a real vector $\bfv\in \bbR^n$, its Euclidean (i.e.,
+  $\ell_{2}$) norm is denoted by~$\length{\bfv}$.
+\item For two $n$-dimensional vectors $\bfa, \bfb$ over a common
+  ring~$R$, their inner product is denoted by
+  $\inner{\bfa, \bfb} = \sum_{i=0}^{n-1} \bfa_{i} \bfb_{i} \in
+  R$.
+\end{itemize}
+
+\else
+
+Vectors are denoted by bold lower-case letters (e.g., $\bfa, \bfb, \bfv$),
+and matrices are denoted by bold upper-case letters (e.g., $\bfA, \bfB, \bfS$).
+For a set~$D$, the set of $m$-dimensional vectors with entries in~$D$ is denoted by~$D^{m}$,
+and the set of $m$-by-$n$ matrices with entries in~$D$ is denoted by $D^{m \times n}$.
+For an $n$-dimensional vector $\bfv$, its $i$th entry for $0\leq i < n$ is denoted by~$\bfv_i$.
+For an $m$-by-$n$ matrix~$\bfA$, its $(i,j)$th entry (i.e., the entry in the $i$th row and $j$th
+column) for $0 \leq i <m$ and $0 \leq j < n$ is denoted by~$\bfA_{i,j}$, and its $i$th row is
+denoted by~$\bfA_i = (\bfA_{i,0},\bfA_{i,1},\ldots,\bfA_{i,n-1})$.
+The transpose of a matrix~$\bfA$ is denoted by $\bfA^\text{T}$.  
+
+An $m$-bit string $\bfk\in \set{0,1}^m$ is written as a vector over the set $\{0,1\}$.
+The ring of integers is denoted by $\bbZ$, and, for a positive integer~$q$, the quotient ring
+of integers modulo~$q$ is denoted by $\bbZ_q = \bbZ/q\bbZ$.
+For a probability distribution or randomized algorithm~$\chi$, the notation $e \getsr \chi$ denotes drawing a value~$e$
+according to~$\chi$.
+The $n$-fold product distribution of~$\chi$ with itself is denoted by~$\chi^{n}$.
+For a finite set~$S$, the uniform distribution on~$S$ is denoted by~$U(S)$.
+The floor of a real number~$a$, i.e., the largest integer less than or equal to $a$,
+is denoted by~$\floor{a}$.
+The closest integer to a real number~$a$ (with ties broken upward) is denoted by
+$\round{a} = \floor{a+1/2}$.
+For a real vector $\bfv\in \bbR^n$, its Euclidean (i.e.,~$\ell_{2}$) norm is denoted
+by~$\length{\bfv}$.
+For two $n$-dimensional vectors $\bfa, \bfb$ over a common ring~$R$, their inner product
+is denoted by $\inner{\bfa, \bfb} = \sum_{i=0}^{n-1} \bfa_{i} \bfb_{i} \in R$.
+
+\fi
+
+\subsection{Cryptographic definitions}%
+\label{sec:background:crypto}
+
+This section recalls definitions of cryptographic primitives that are relevant to \FrodoKEM, along with their correctness and security notions.
+
+\begin{definition}[Key encapsulation mechanism]
+A \emph{key encapsulation mechanism} $\KEM$ is a tuple of algorithms
+$(\KeyGen,\Encaps,\Decaps)$ along with a finite keyspace $\KeySp$:
+\begin{itemize}
+\item $\KeyGen() \tor (\pk, \sk)$: A probabilistic \emph{key generation algorithm} that outputs a public key $\pk$ and a secret key $\sk$.
+\item $\Encaps(\pk) \tor (c, \ssk)$: A probabilistic \emph{encapsulation algorithm} that takes as input a public key $\pk$, and outputs an encapsulation $c$ and a shared secret $\ssk \in \KeySp$.  The encapsulation is sometimes called a ciphertext.
+\item $\Decaps(c, \sk) \to \ssk'$: A (usually deterministic) \emph{decapsulation algorithm} that takes as input an encapsulation $c$ and a secret key $\sk$, and outputs a shared secret $\ssk' \in \KeySp$.
+\end{itemize}
+\end{definition}
+
+The notion of $\delta$-correctness gives a bound on the probability of a legitimate protocol execution producing different keys in encapsulation and decapsulation.
+
+\begin{definition}[$\delta$-correctness for KEMs]
+A key encapsulation mechanism $\KEM$ is \emph{$\delta$-correct} if
+\[ \Pr\left[ \ssk' \ne \ssk : (\pk, \sk) \getsr \KEM.\KeyGen(); (c, \ssk) \getsr \KEM.\Encaps(\pk);  \ssk' \gets \KEM.\Decaps(c, \sk) \right] \le \delta\enspace . \]
+\end{definition}
+
+%\begin{definition}[$\delta$-correctness of a PKE]
+%A public key encryption scheme $\pke = (\gen, \enc, \dec)$ with message space $\M$ is called $\delta$-correct if
+
+%\[\mathbb{E}_{(pk,sk)}[\max_{m \in \M} \Pr[\dec(sk, c) \neq m | c \leftarrow \enc(pk, m)] \leq \delta\]
+
+%\noindent where the expectation is taken over all $(pk,sk) \sample \gen()$
+%\end{definition}
+
+%In settings where there are multiple users, we need a definition of multi-user correctness. We denote this as $\delta(u)$ which is the maximum $\delta$, taken over all $u$ users. 
+
+%\begin{definition}[$\delta(u)$-correctness of a PKE]
+%A public key encryption scheme $\pke = (\gen, \enc, \dec)$ with message space $\M$ is called $\delta(u)$-correct if
+
+%\[\mathbb{E}[\max_{j \in [u]}\max_{m \in \M} \Pr[\dec(sk_j, c) \neq m | c \leftarrow \enc(pk_j, m)] \leq \delta(u)\]
+
+%\noindent where the expectation is taken over all $(pk_1,sk_1),\ldots,(pk_u, sk_u) \sample \gen().$
+%\end{definition}
+
+
+The following defines indistinguishability under chosen-ciphertext attack (\INDCCA) for a key encapsulation mechanism.
+
+\begin{definition}[$\INDCCA$ for KEMs]
+  Let $\KEM$ be a key encapsulation mechanism (with keyspace $\KeySp$), and let~$\Adversary$ be an algorithm.
+  The security experiment for \emph{indistinguishability under adaptive chosen ciphertext attack (\INDCCATwo, or just \INDCCA)} of $\KEM$ is $\Exp{\indcca}{\KEM}(\Adversary)$, as defined in \autoref{fig:kem-indcca}.
+  The advantage of~$\Adversary$ in the experiment is
+\[ \Adv{\indcca}{\KEM}(\Adversary) := \left| \Pr\left[ \Exp{\indcca}{\KEM}(\Adversary) \Rightarrow 1 \right] - \frac{1}{2} \right| \enspace . \]
+\end{definition}
+
+Note that $\Adversary$ can be a classical or quantum algorithm.
+Even if $\Adversary$ is a quantum algorithm, we still require it to make classical queries to its $\ODecaps$ oracle.
+
+\begin{figure}[h]
+\centering
+\fbox{
+\begin{minipage}[t]{0.4\textwidth}
+\underline{Experiment $\Exp{\indcca}{\KEM}(\Adversary)$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $(\pk, \sk) \getsr \KEM.\KeyGen()$
+\STATE $b \getsr \{0,1\}$
+\STATE $(c^*, \ssk_0) \getsr \KEM.\Encaps(\pk)$
+\STATE $\ssk_1 \getsr U(\KeySp)$
+\STATE $b' \getsr \Adversary^{\ODecaps(\cdot)}(\pk,\ssk_b, c^*)$
+\IF {$b'=b$}
+  \RETURN $1$
+\ELSE
+  \RETURN $0$
+\ENDIF
+\end{algorithmic}
+\end{minipage}
+~
+\begin{minipage}[t]{0.4\textwidth}
+\underline{Oracle $\ODecaps(c)$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\IF {$c = c^*$}
+  \RETURN $\bot$
+\ELSE
+  \RETURN $\KEM.\Decaps(c, \sk)$
+\ENDIF
+\end{algorithmic}
+\end{minipage}
+}
+\caption{Security experiment for indistinguishability under adaptive
+  chosen ciphertext attack (\INDCCATwo, or just \INDCCA) of a key
+  encapsulation mechanism $\KEM$ for an adversary $\Adversary$.}
+\label{fig:kem-indcca}
+\end{figure}
+
+The key encapsulation mechanism presented in this work is obtained by transforming a \emph{public-key encryption} (PKE) scheme, which is formally defined as follows.
+
+\begin{definition}[Public-key encryption scheme]
+  A \emph{public-key encryption scheme} $\PKE$ is a tuple of
+  algorithms $(\KeyGen,\Enc,\Dec)$ along with a message space
+  $\MsgSp$:
+\begin{itemize}
+\item $\KeyGen() \tor (\pk, \sk)$: A probabilistic \emph{key generation algorithm} that outputs a public key $\pk$ and a secret key $\sk$.
+\item $\Enc(m, \pk) \tor c$: A probabilistic \emph{encryption
+    algorithm} that takes as input a message $m \in \MsgSp$ and public
+  key $\pk$, and outputs a ciphertext $c$.  The deterministic form is
+  denoted $\Enc(m, \pk; r) \to c$, where the randomness
+  $r \in \RandSp$ is passed as an explicit input; $\RandSp$ is called
+  the \emph{randomness space} of the encryption algorithm.
+\item $\Dec(c, \sk) \to m'$ or $\bot$: A deterministic
+  \emph{decryption algorithm} that takes as input a ciphertext $c$ and
+  secret key $\sk$, and outputs either a message $m' \in \MsgSp$ or a
+  special error symbol $\bot \notin \MsgSp$.
+\end{itemize}
+\end{definition}
+
+The notion of $\delta$-correctness captures an upper bound on the
+probability of decryption failure in a legitimate execution of the
+scheme.
+\begin{definition}[$\delta$-correctness for PKEs~\cite{TCC:HofHovKil17}]
+  \label{def:delta-correct}
+  A public-key encryption scheme $\PKE$ with message space $\MsgSp$ is
+  \emph{$\delta$-correct} if
+  \begin{equation}
+    \label{eq:delta-correct}
+    \E\left[ \max_{m \in \MsgSp} \Pr\left[ \PKE.\Dec(c, \sk)
+        \neq m : c \getsr \PKE.\Enc(m, \pk) \right] \right] \leq
+    \delta \enspace,
+  \end{equation}
+  where the expectation is taken over
+  $(\pk, \sk) \getsr \PKE.\KeyGen()$.
+\end{definition}
+In our PKE, the probability expression in
+\autoref{eq:delta-correct} has no dependence on~$m$, so the
+condition simplifies to
+\begin{equation}
+  \label{eq:simpler-delta-correct}
+  \Pr\left[ \PKE.\Dec(c, \sk)
+    \neq m : (\pk, \sk) \gets \PKE.\KeyGen(); c \getsr \PKE.\Enc(m,
+    \pk) \right]  \leq \delta \enspace ,
+\end{equation}
+which is what we analyze when calculating the probability of
+decryption failure (see \autoref{sec:cpa-pke-correctness}).
+
+The PKE scheme we use as the basis for the KEM transformation in
+\autoref{sec:cca-transform} is required to satisfy the
+notion of \INDCPA security, which is defined as follows.
+
+\begin{definition}[$\INDCPA$ for PKE]%
+  \label{def:IND-CPA}
+  Let $\PKE$ be a public-key encryption scheme (with message space~$\MsgSp$), and let $\Adversary$ be an algorithm.
+  The security experiment for \emph{indistinguishability under chosen plaintext attack (\INDCPA)} of $\PKE$ is $\Exp{\indcpa}{\PKE}(\Adversary)$ shown in \autoref{fig:pke-indcpa}.
+  The advantage of~$\Adversary$ in the experiment is
+  \cpnote{We define this and other IND advantages as (absolute) differences between ``correct guessing probability'' and $1/2$.
+    But we define the LWE advantages as the (absolute) difference between acceptance probabilities given one of two distributions.
+    These are equal, \emph{if} we multiply the former style by $2$ to get a number between $0$ and $1$.
+    Otherwise, they have incompatible ``units'' things can get messed up switching between them.
+    So I would favor including the factor of $2$ in these definitions, but we must check what definitions the external results we rely on use.
+    And there is another issue: when game-hopping, we have to link the advantages in adjacent games to the advantage in the game that the reduction ``embeds,'' and this is more subtle when advantage is defined in terms of a ``guessing game'' versus with a difference of acceptance probabilities.}
+\[ \Adv{\indcpa}{\PKE}(\Adversary) := \left| \Pr\left[ \Exp{\indcpa}{\PKE}(\Adversary) \Rightarrow 1 \right] - \frac{1}{2} \right| . \]
+\end{definition}
+% Note that $\Adversary$ can be a classical or quantum algorithm.
+
+\begin{figure}[h]
+\centering
+\fbox{
+\begin{minipage}[t]{0.4\textwidth}
+\underline{Experiment $\Exp{\indcpa}{\PKE}(\Adversary)$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $(\pk, \sk) \getsr \PKE.\KeyGen()$
+\STATE $(m_0, m_1, st) \getsr \Adversary(\pk)$
+\STATE $b \getsr \{0,1\}$
+\STATE $c^* \getsr \PKE.\Enc(m_b, \pk)$
+\STATE $b' \getsr \Adversary(\pk, c^*, st)$
+\IF {$b'=b$}
+  \RETURN $1$
+\ELSE
+  \RETURN $0$
+\ENDIF
+\end{algorithmic}
+\end{minipage}
+}
+\caption{Security experiment for indistinguishability under chosen plaintext attack (\INDCPA) of a public-key encryption scheme $\PKE$ against an adversary $\Adversary$.}
+\label{fig:pke-indcpa}
+\end{figure}
+
+In the multi-user (or more generally, multi-challenge) setting, we need a suitable definition of multi-user correctness.
+% \cnote{the next sentence doesn't really make sense: delta(u) is not the maximum $\delta$ (which doesn't mean anything), it is merely a *bound*.}
+% We denote this as $\delta(u)$, which is the maximum $\delta$ taken over all $u$ users.
+
+\begin{definition}[$\delta(u)$-correctness for PKEs]%
+  \label{def:delta-correctness}
+  A public-key encryption scheme $\pke$ with message space $\MsgSp$ is called $\delta(u)$-correct if for all~$u$,
+  \[ \E\left[ \max_{j \in [u]} \max_{m \in \M} \Pr[\PKE.\dec(sk_j, \PKE.\enc(pk_j, m)) \neq m] \right] \leq \delta(u) \]
+  where the expectation is taken over $(pk_1,sk_1),\ldots,(pk_u, sk_u) \getsr \PKE.\KeyGen()$.
+\end{definition}
+
+We note that in \FrodoPKE, the probability of incorrect decryption does not depend on the choice of message $m \in \M$, so the expression from \autoref{def:delta-correctness} simplifies to
+\[ \E\left[ \max_{j \in [u]} \Pr[\PKE.\dec(sk_j, \PKE.\enc(pk_j, m)) \neq m] \right] ,
+\]
+where $m \in \M$ is some arbitrary message.
+Also note that by restricting to $u=1$, the above definitions simplify to merely the single-user correctness~$\delta$~\cite{TCC:HofHovKil17}.
+Because the maximum of several non-negative values is at most their sum, by linearity of expectation, any $\pke$ is $\delta(u)$-correct for $\delta(u) = \delta \cdot u$.
+However, there is strong evidence that for \FrodoPKE and other natural lattice-based schemes, $\delta(u) \ll \delta \cdot u$; see~\cite[Table~1]{CCS:DHKLS21}.
+
+In the multi-challenge security experiments, an oracle generates each ciphertext by encrypting under one of several (properly generated) public keys, as specified by the adversary.
+Formally, we define \MINDCPA security for a PKE, and \MINDCCA security for a KEM.
+Note that \INDCPA and \INDCCA are simply the special cases of these notions, respectively, for $n=u=1$.
+
+\begin{definition}[\MINDCPA for PKE~\cite{GlabushThesis}]%
+  \label{def:MIND-CPA}
+  Let \PKE be a public-key encryption scheme and let~$\Adversary$ be an algorithm.  The \MINDCPA security
+  experiment for~$\Adversary$ attacking \PKE is
+  $\Exp{\MINDCPA}{\PKE}(\Adversary)$ from \autoref{fig:pke-mindcpa}.  The
+  advantage of~$\Adversary$ in the experiment is
+  \[ \Adv{\MINDCPA}{\PKE}(\Adversary) := \left| \Pr\left[ \Exp{\MINDCPA}{\PKE}(\Adversary) \Rightarrow 1 \right] - \frac{1}{2} \right| . \]
+ 
+\end{definition}
+
+\begin{figure}[h]
+	\centering
+	\fbox{
+		\begin{minipage}[t]{0.4\textwidth}
+			\underline{Experiment $\Exp{\MINDCPA}{\PKE}(\Adversary)$:}
+			\vspace{-1em}
+			\begin{algorithmic}[1]
+                    \STATE $b \getsr \{0,1\}$
+                    \FOR {$ j = 1,\ldots, u$} \STATE{$(\pk_j, \sk_j) \gets \PKE.\KeyGen()$} \ENDFOR
+                    \STATE $\Vec{\pk} = (\pk_1,\ldots,\pk_u)$
+				\STATE $b' \gets
+                                \Adversary^{\challoracle}(\Vec{\pk})$
+                                \IF {$b = b'$}
+				\RETURN 1
+				\ELSE
+				\RETURN 0
+				\ENDIF
+			\end{algorithmic}
+		\end{minipage}
+		~
+		\begin{minipage}[t]{0.4\textwidth}
+                \underline{Oracle $\challoracle(m_0, m_1, j):$}
+                \vspace{-1em}
+                \begin{algorithmic}
+                  \STATE [may be called up to $n$ times]
+                \STATE $c \gets \PKE.\Enc(pk_j, m_b)$
+                \RETURN $c$
+                \end{algorithmic}
+		\end{minipage}
+	}
+	\caption{Security experiment for \MINDCPA security of a public-key encryption scheme $\PKE$ against an adversary $\Adversary$.}%
+	\label{fig:pke-mindcpa}
+\end{figure}
+
+\begin{definition}[\MINDCCA for KEM~\cite{CCS:DHKLS21}]%
+  \label{def:MIND-CCA}
+  Let \KEM be a key encapsulation mechanism (with key space $\KeySp$), and let~$\Adversary$ be an algorithm.
+  The \MINDCCA security experiment for $\Adversary$ attacking \KEM is $\Exp{\MINDCCA}{\KEM}(\Adversary)$ from \autoref{fig:kem-mindcca}.
+  The advantage of~$\Adversary$ in the experiment is
+ \[ \Adv{\MINDCCA}{\KEM}(\Adversary) := \left| \Pr\left[ \Exp{\MINDCCA}{\KEM}(\Adversary) \Rightarrow 1 \right] - \frac{1}{2} \right| . \]
+\end{definition}
+
+\begin{figure}[h]
+  \centering
+  \fbox{
+    \begin{minipage}[t]{0.4\textwidth}
+      \underline{Experiment $\Exp{\MINDCCA}{\KEM}(\Adversary)$:}
+      \vspace{-1em}
+      \begin{algorithmic}[1]
+        \STATE $b \getsr \{0,1\}$
+        \FOR {$ j = 1,\ldots, u$} \STATE{$(\pk_j, \sk_j) \gets \KEM.\KeyGen()$} \ENDFOR
+        \STATE $\Vec{\pk} = (\pk_1,\ldots,\pk_u)$
+        \STATE $b' \gets \Adversary^{\ODecaps,\challoracle}(\Vec{\pk})$
+        \IF {$b = b'$}
+        \RETURN 1
+        \ELSE
+        \RETURN 0
+        \ENDIF
+      \end{algorithmic}
+    \end{minipage}
+    ~
+    \begin{minipage}[t]{0.4\textwidth}
+      \underline{Oracle $\ODecaps(j,c)$:}
+      \vspace{-1em}
+      \begin{algorithmic}[1]
+        \IF {$c \in \cipherlist$}
+        \RETURN $\bot$ 
+        \ELSE
+        \RETURN $\KEM.\Decaps(c, \sk_j)$
+        \ENDIF
+      \end{algorithmic}
+      \underline{Oracle $\challoracle(j):$}
+      \vspace{-1em}
+      \begin{algorithmic}[1]
+        \STATE [may be called up to $n$ times]
+        \STATE $(c, k_0) \gets \KEM.\Encaps(pk_j)$
+	\STATE $\cipherlist := \cipherlist \cup{c}$
+        \STATE $k_1 \getsr \mathcal{K}$
+        \RETURN $(c, k_b)$
+      \end{algorithmic}
+    \end{minipage}
+  }
+  \caption{Security experiment for \MINDCCA security of a key encapsulation mechanism $\KEM$ against an adversary $\Adversary$.}%
+  \label{fig:kem-mindcca}
+\end{figure}
+
+
+\subsection{Learning with errors}%
+\label{sec:lwe}
+
+The security of our proposed PKE and KEM relies on the hardness of the
+\emph{Learning With Errors} (LWE) problem, a generalization of the
+classic Learning Parities with Noise problem (see,
+e.g.,~\cite{C:BFKL93}) first defined by Regev~\cite{Reg09}. This
+section defines the LWE probability distributions and computational
+problems.
+
+\begin{definition}[LWE distribution]%
+  \label{def:lwe-distrib}
+  Let $n, q$ be positive integers, and let $\chi$ be a distribution
+  over $\bbZ$.  For an $\bfs \in \bbZ_q^n$, the \emph{LWE
+    distribution} $A_{\bfs, \chi}$ is the distribution over
+  $\bbZ_q^n \times \bbZ_q$ obtained by choosing $\bfa \in \bbZ_q^n$
+  uniformly at random and an integer error $e \in \bbZ$ from~$\chi$,
+  and outputting the pair
+  $(\bfa, \inner{\bfa, \bfs} + e \bmod q) \in \bbZ_q^n \times \bbZ_q$.
+\end{definition}
+
+There are two main kinds of computational LWE problem: \emph{search},
+which is to recover the secret~$\bfs \in \bbZ_{q}^{n}$ given a certain
+number of samples drawn from the LWE distribution~$A_{\bfs, \chi}$;
+and \emph{decision}, which is to distinguish a certain number of
+samples drawn from the LWE distribution from uniformly random samples.
+For both variants, one often considers two distributions of the
+secret~$\bfs \in \bbZ_{q}^{n}$: the uniform distribution, and the
+distribution~$\chi^{n} \bmod{q}$ where each coordinate is drawn from
+the error distribution~$\chi$ and reduced modulo~$q$. The latter is
+often called the ``normal form'' of LWE.
+
+\begin{definition}[LWE Search Problem]%
+  \label{def:slweproblem}
+  Let $n, m, q$ be positive integers, and let $\chi$ be a distribution
+  over~$\bbZ$.  The \emph{uniform-secret} (respectively,
+  \emph{normal-form}) learning with errors \emph{search} problem with
+  parameters $(n, m, q, \chi)$, denoted by $\SLWE_{n,m,q,\chi}$
+  (respectively, $\nfSLWE_{n,m,q,\chi}$), is as follows: given~$m$
+  samples from the LWE distribution $A_{\bfs, \chi}$ for uniformly
+  random~$\bfs$ (resp, $\bfs \getsr \chi^{n} \bmod q$), find $\bfs$.
+  More formally, for an adversary~$\Adversary$, define (for the
+  uniform-secret case)
+  \[ \Adv{\slwe}{n,m,q,\chi}(\Adversary) = \Pr \bracks*{
+      \Adversary(((\bfa_i, b_{i}))_{i=1,\ldots,m}) \Rightarrow \bfs
+      : \bfs \getsr U(\bbZ_q^n), (\bfa_{i}, b_{i}) \getsr A_{\bfs,
+        \chi} \text{ for } i=1,\ldots,m } \enspace . \] Similarly,
+  define (for the normal-form case)
+  $\Adv{\nfslwe}{n,m,q,\chi}(\Adversary)$, where
+  $\bfs \getsr \chi^{n} \bmod q$ instead of
+  $\bfs \getsr U(\bbZ_{q}^{n})$.
+\end{definition}
+
+\begin{definition}[LWE Decision Problem]%
+  \label{def:dlweproblem}
+  Let $n, m, q$ be positive integers, and let~$\chi$ be a distribution
+  over~$\bbZ$.  The \emph{uniform-secret} (respectively,
+  \emph{normal-form}) \emph{learning with errors decision problem}
+  with parameters $(n, m, q, \chi)$, denoted $\DLWE_{n,m,q,\chi}$ 
+  (respectively, $\nfDLWE_{n,m,q,\chi}$), is as follows: distinguish~$m$
+  samples drawn from the LWE distribution $A_{\bfs, \chi}$ from~$m$
+  samples drawn from the uniform distribution
+  $U(\bbZ_q^n \times \bbZ_q)$.  More formally, for an adversary
+  $\Adversary$, define (for the uniform-secret case)
+  \begin{align*}
+    \Adv{\dlwe}{n,m,q,\chi}(\Adversary) = \Big|
+      &\Pr \bracks*{
+      \Adversary((\bfa_{i}, b_{i})_{i=1,\ldots,m}) \Rightarrow 1 :
+      \bfs \getsr U(\bbZ_q^n), (\bfa_{i}, b_{i}) \getsr
+      A_{\bfs,\chi} \text{ for } i=1,\ldots, m } \\
+    - &\Pr \bracks*{
+      \Adversary((\bfa_{i}, b_{i})_{i=1,\ldots,m}) \Rightarrow 1 :
+      (\bfa_{i}, b_{i}) \getsr U(\bbZ_{q}^{n} \times \bbZ_{q})
+      \text{ for } i=1,\ldots, m } \Big| \enspace .
+  \end{align*}
+  %
+  Similarly, define (for the normal-form case)
+  $\Adv{\nfdlwe}{n,m,q,\chi}(\Adversary)$,  where
+  $\bfs \getsr \chi^{n} \bmod q$ instead of
+  $\bfs \getsr U(\bbZ_{q}^{n})$.
+\end{definition}
+
+For all of the above problems, when~$\chi = \Psi_{\alpha q}$ is the
+continuous Gaussian of parameter~$\alpha q$, rounded to the nearest
+integer (see \autoref{def:rounded-gaussian} below), we often
+replace the subscript~$\chi$ by~$\alpha$.
+
+\subsection{Gaussians}%
+\label{sec:gaussians}
+
+For any real $s > 0$, the (one-dimensional) \emph{Gaussian function}
+with parameter (or width)~$s$ is the function
+$\rho_{s} \colon \bbR \to \bbR^{+}$, defined as
+\[ \rho_s(\bfx) := \exp(-\pi \norm{\bfx}^2/s^2) \enspace .\]
+
+\begin{definition}[Gaussian distribution]%
+  \label{def:gaussian}
+  For any real $s > 0$, the (one-dimensional) \emph{Gaussian
+    distribution} with parameter (or width)~$s$, denoted~$D_{s}$, is
+  the distribution over~$\bbR$ having probability density function
+  $D_{s}(x) = \rho_{s}(x)/s$.
+\end{definition}
+Note that $D_{s}$ has standard deviation $\sigma = s / \sqrt{2 \pi}$.
+
+\begin{definition}[Rounded Gaussian distribution]%
+  \label{def:rounded-gaussian}
+  For any real $s > 0$, the \emph{rounded Gaussian distribution} with
+  parameter (or width)~$s$, denoted $\Psi_s$, is the distribution
+  over~$\bbZ$ obtained by rounding a sample from~$D_{s}$ to the
+  nearest integer:
+  \begin{equation*}
+    \Psi_s(x) = \int_{\{z\colon \lfloor z \rceil =
+      x\}} D_s(z) \, dz \enspace .
+  \end{equation*}
+\end{definition}
+
+\subsection{Lattices}%
+\label{sec:lattices}
+
+Here we recall some background on lattices that will be used when
+relating LWE to lattice problems.
+
+\begin{definition}[Lattice]%
+  \label{def:lattice}
+  A (full-rank) \emph{$n$-dimensional lattice} $\calL$ is a discrete
+  additive subset of $\bbR^n$ for which
+  $\text{span}_{\bbR}(\calL) = \bbR^{n}$. Any such lattice can be
+  generated by a (non-unique) \emph{basis}
+  $\bfB = \set{ \bfb_1, \dots, \bfb_n } \subset \bbR^n$ of linearly
+  independent vectors, as
+  \[ \calL = \calL(\bfB) := \bfB \cdot \bbZ^n = \set[\Big]{ \sum_{i =
+        1}^n z_i \cdot \bfb_i\colon z_i \in \bbZ } \enspace . \] The
+  \emph{volume}, or \emph{determinant}, of~$\calL$ is defined as
+  $\vol(\calL) := \abs{\det(\bfB)}$. An \emph{integer lattice} is a
+  lattice that is a subset of~$\bbZ^{n}$. For an integer $q$, a
+  \emph{$q$-ary lattice} is an integer lattice that
+  contains~$q\bbZ^{n}$.
+\end{definition}
+
+\begin{definition}[Minimum distance]%
+  \label{def:minimum-dist}
+  For a lattice~$\calL$, its \emph{minimum distance} is the length (in
+  the Euclidean norm) of a shortest non-zero lattice vector:
+  \[ \lambda_1(\calL) = \min_{\bfv \in \calL \setminus \set{
+        \mathbf{0} }} \length{ \bfv } \enspace . \]
+  More generally, its \emph{$i$th successive minimum}
+  $\lambda_i(\calL)$ is the smallest real $r > 0$ such that~$\calL$
+  has~$i$ linearly independent vectors of length at most~$r$.
+\end{definition}
+
+\begin{definition}[Discrete Gaussian]%
+  \label{def:discrete-gaussian}
+  For a lattice $\calL \subset \bbR^{n}$, the \emph{discrete Gaussian
+    distribution} over~$\calL$ with parameter~$s$, denoted
+  $D_{\calL,s}$, is defined as
+  $D_s(\bfx) = \rho_s(\bfx) / \rho_s(\calL)$ for $\bfx \in \calL$ (and
+  $D_{s}(\bfx)=0$ otherwise), where
+  $\rho_s(\calL) = \sum_{\bfv \in \calL}\rho_s(\bfv)$ is a
+  normalization factor.
+\end{definition}
+
+We now recall various computational problems on lattices. We stress
+that these are \emph{worst-case} problems, i.e., to solve such a
+problem an algorithm must succeed on \emph{every} input (and not just on a randomly chosen input from some probability distribution). The following
+two problems are parameterized by an \emph{approximation factor}
+$\gamma = \gamma(n)$, which is a function of the lattice dimension $n$.
+
+\begin{definition}[Decisional approximate shortest vector problem
+  ($\GapSVP_\gamma$)]%
+  \label{def:GapSVP}
+  Given a basis $\bfB$ of an $n$-dimensional lattice
+  $\calL = \calL(\bfB)$, where $\lambda_1(\calL) \leq 1$ or
+  $\lambda_1(\calL) > \gamma(n)$, determine which is the case.
+\end{definition}
+
+\begin{definition}[Approximate shortest independent vectors problem
+  ($\SIVP_\gamma$)]%
+  \label{def:SIVP}
+  Given a basis $\bfB$ of an $n$-dimensional lattice
+  $\calL = \calL(\bfB)$, output a set
+  $\set{ \bfv_{1}, \ldots, \bfv_{n} } \subset \calL$ of~$n$ linearly
+  independent lattice vectors where
+  $\length{ \bfv_i } \leq \gamma(n) \cdot \lambda_n(\calL)$ for all~$i$.
+\end{definition}
+
+The following problem is parameterized by a function~$\varphi$ from
+lattices to positive real numbers.
+
+\begin{definition}[Discrete Gaussian Sampling ($\DGS_{\varphi}$)]%
+  \label{def:DGS}
+  Given a basis~$\bfB$ of an $n$-dimensional lattice $\calL =
+  \calL(\bfB)$ and a real number $s \geq \varphi(\calL)$, output a sample
+  from the discrete Gaussian distribution $D_{\calL,s}$.
+\end{definition}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

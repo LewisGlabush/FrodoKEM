@@ -1,0 +1,593 @@
+\section{Renewed Cryptanalysis}
+
+In this section, we provide a renewed cryptanalysis of the LWE instances underlying the \INDCPA-secure $\FrodoPKE$ public-key encryption scheme. 
+Originally proposed as part of the $\FrodoKEM$ submission to the NIST PQC standardization process~\cite{NISTPQC-R3:FrodoKEM20}, these LWE instances received a thorough cryptanalysis in the style of ML-KEM~\cite{MLKEM,NISTPQC-R3:CRYSTALS-Kyber20}.
+Such analysis proposes two computational models, ``core-SVP'' and ``beyond core-SVP'' to estimate the cost of lattice reduction attacks on LWE. The specific estimates are then generated using the ``leaky-LWE-estimator'' script introduced in \cite{dachman2020lwe}.\footnote{\url{https://github.com/lducas/leaky-LWE-Estimator/tree/NIST-round3}}
+
+In order to revalidate our security claims using different code and to extend them to account for results published since \cite{NISTPQC-R3:FrodoKEM20}, we proceed to perform an analysis of the cost of lattice attacks, using the ``lattice-estimator'' script.\footnote{\url{https://github.com/malb/lattice-estimator}}
+We will make our estimates reproducible by publishing our code. Overall, we keep the internals of the estimator untouched, only customizing the cost models in order to capture different hypothetical scenarios.
+
+\subsection{Relevant Lattice Reduction Attacks}
+
+We briefly recall the cryptanalytic attacks on LWE relevant to the $\Frodo$ parametrization. These attacks have been analyzed in extensive prior work. Hence, we will just give a brief description and references here.
+
+\paragraph{Primal attack.}
+Let $(\bfA, \bfb) \in \ZZ_q^{m \times n} \times \ZZ_q^m$ be a collection of $m$ LWE samples. The primal attack attempts to solve the search variant of LWE by finding the vector closest to $\bfb$ in the ``primal lattice''
+\[
+\Lambda_q(\bfA) = \left\{\bfA \bfx \bmod q \mid \bfx \in \ZZ^n \right\}.
+\]
+Since $\bfb = \bfA \bfs + \bfe \bmod q$ with $\bfe$ coming from a narrow distribution such that \mbox{$\norm{\bfe} \ll \lambda_1(\Lambda_q(\bfA))$}, this leads to recovery of $\bfA \bfs$ as the closest vector to $\bfb$. From this, $\bfe$ can be recovered, and consequently $\bfs$ if $\bfA$ has rank $n$.
+
+We estimate the cost of two common variants of the primal attack, that we call ``uSVP'' and ``BDD''.
+In the uSVP case, we build a basis $\bfB = \left( \bfA \mid q\bfI_m \mid -\bfb \right)^T$ and reduce it using block reduction, as to obtain a basis close to BKZ-$\beta$-reduced for a block size $\beta$ satisfying the \cite{USENIX:ADPS16} success condition.\footnote{We note that while smaller block size $\beta-\Delta$ may suffice, the success probability drops sharply as $\Delta$ grows~\cite{PKC:PosVir21}.}\todo{We could say more if we really wanted, but I'm not sure it's necessary}
+This results in recovering the shortest vector in the integer span of $\bfB$, that is $(\bfs^T \mid \mathbf{\star}^T \mid 1) \cdot \bfB = - \bfe^T$, where $\mathbf{\star} = ( \bfb - \bfA \bfs - \bfe )/q$.
+In the BDD case, we first build a basis $\bfB_0 = \left( \bfA \mid q\bfI_m \right)^T$, and BKZ-$\beta_\text{red}$ reduce it. Then construct a new basis $\bfB_1 = \left(\bfB_0 \mid -\bfb^T \right)$, LLL reduce it, and perform one call to a shortest vector problem (SVP) solver in rank $\beta_\text{svp}$ on the last projective block of the basis, followed by a final call to LLL, similarly to \cite{RSA:LiuNgu13}. This similarly recovers $-\bfe$, but allows the flexibility of using \mbox{$\beta_\text{red} < \beta_\text{svp}$}, balancing the cost of the reduction versus recovery-of-$\bfe$ phases.
+
+\paragraph{Dual attack.}
+Let $(\bfA, \bfb) \in \ZZ_q^{m \times n} \times \ZZ_q^m$. The dual attack attempts to solve the decision variant of LWE by distinguishing whether $\bfb = \bfA \bfs + \bfe \bmod q$, or $\bfb$ was sampled uniformly at random from $\ZZ_q^m$. In general terms, this is done by finding a short vector $\bfx$ in the ``dual lattice''
+\[
+\Lambda_q^\perp(\bfA) = \left\{\bfx \in \ZZ^m \mid \bfx^T \bfA = 0 \bmod q \right\}.
+\]
+Once such a vector is found, one computes $\bfx^T \bfb$. If $\bfb$ was sampled from the LWE distribution, then \mbox{$\bfx^T \bfb = \bfx^T \bfe \ll q$}, while if $\bfb$ was uniformly sampled, then $\bfx^T \bfb$ will be similarly uniformly distributed $\bmod~q$~\cite{PQCBook:MicReg09}.\footnote{A variant where short vectors $(\bfx, \bfy)$ such that $\bfx^T \bfA = \bfy \bmod q$ are sought can be similarly used if $\bfs$ is sampled from a narrow distribution, such that \mbox{$\bfx^T \bfb = \bfy^T \bfs + \bfx^T \bfe \ll q$}.}
+The shorter $\bfx$, the more accurate this test is, but also the costlier it is to recover $\bfx$. Therefore, there is a natural accuracy-runtime trade-off.
+Let $b = 0$ if $\bfb = \bfA \bfs + \bfe \mod q$, and $b = 1$ otherwise. Let $T_i \in \{0, 1\}$ be the outcome of the $i$-th run of the test above,\footnote{Probability over the coins used by lattice reduction and used for re-randomizing the basis of $\Lambda_q^\perp(\bfA)$ before lattice reduction.} and let $\varepsilon$ be the distinguishing advantage of such test, meaning that $\Pr[T_i = b] \ge \frac{1}{2} + \varepsilon$. To amplify this advantage, we run the test $N$ times, and perform majority voting, meaning the overall attack returns a guess $\lfloor \sum T_i / N \rceil$ for $b$. Using Hoeffding's inequality, or other similar tail bounds over $\sum T_i$, one can see that choosing $N$ such that $N \varepsilon^2 \in O(1)$ suffices to correctly guess $b$ with high probability. Using the Chernoff bound over $\sum T_i$, one can see that choosing $N = 1/(2 \varepsilon^2)$ upper bounds the probability of guessing incorrectly by $(2/e) \cdot 2^{-N}$ as $N \rightarrow \infty$.
+
+Both the primal and dual attack can be optimized to exploit specifics of the LWE parametrization being attacked. Narrow secret distributions can be targeted by mounting attacks where variants of the above lattices are reduced, achieving overall smaller attack costs~\cite{ACISP:BaiGal14,EC:Albrecht17,_INDOCRYPT:EJK20,AC:GuoJoh21,MATZOV22}.
+
+The specific attacks can also be reduced in cost if the block-reduction algorithm being used presents some specific feature. For example, sieving-based SVP solvers can output more than one short vector at the same cost as a single one~\cite{USENIX:ADPS16}. These can be used to perform fewer calls to the SVP solver as part of lattice reduction~\cite{EC:ADHKPS19} in both attacks, and to reduce the number of times that a basis for $\Lambda_q^\perp(\bfA)$ has to be reduced to perform $N$ overall tests during the dual attack~\cite{RSA:LaaWal21}.
+
+Given LWE distribution parameters and an attack strategy, identifying optimal attack parameters and their implied cost requires a model for the cost and quality of lattice reduction and SVP solving (and, in the case lattice sieving is used, a model on the number of short vectors returned by the SVP solver). We proceed to describe two possible methodologies for carrying out such estimates.
+
+\subsection{Estimating the Cost of Lattice Reduction}
+
+The primal and dual atacks require strong lattice reduction, capable of producing lattice bases of significantly better quality than the one given in input.
+State-of-the-art solutions use ``block-reduction'', where only adjacent subsets of basis vectors, or blocks, are considered during each step. Oracles for solving the SVP or approximate-SVP~\cite{_JoC:LiNgu24} problems are called on orthogonal projections of these blocks, and the short vectors output are then integrated into the original basis.
+
+The general approach just described is behind most strong lattice reduction algorithms, such as BKZ~\cite{FCT:SE91,schnorr1994lattice}, Progressive-BKZ~\cite{EC:AWHT16}, Self-dual BKZ~\cite{EC:MicWal16}, and G6K~\cite{EC:ADHKPS19}. The leading term in the cost (in terms of runtime, memory or energy) in all of these algorithms is the cost of the (approximate) SVP solver. Assessing the cost of lattice reduction hence reduces to determining the cost of SVP solving, and the number of times that the SVP solver must be called before good reduction is achieved. The notion of reduction being targeted is BKZ-$\beta$-reducedeness~\cite{FCT:SE91,schnorr1994lattice}, requiring that every first vector of a reduced lattice basis' block of rank $\beta$ be the shortest vector in the block. 
+
+\subsection{Core-SVP Methodology}
+
+In the ``core-SVP'' methodology~\cite{USENIX:ADPS16} one observes that in order to achieve BKZ-$\beta$-reducedness, the shortest vector problem must have been solved on blocks of rank $\beta$. Being the cost of SVP solving the leading term in the cost of lattice reduction, one can approximate the cost of lattice reduction by just considering the smaller cost of a single SVP solver call. This choice is a conservative one, but also adds a margin against possible improvements in block-reduction reducing the number of SVP calls required to achieve BKZ-$\beta$-reducedness.
+
+The utility of core-SVP estimates is in the security margin they provide. For this reason, we make various simplifying assumptions to obtain a likely lower bound for the cost of lattice reduction.
+\begin{itemize}
+	\item We exclusively consider algorithms in the RAM model, where read/write access to memory is essentially free.
+	\item We consider asymptotic quantum speedups to classical algorithms, where quantum computation can be run arbitrarily long times, and doesn't incur any quantum memory costs.
+	\item We consider that operations on rank-$\beta$ vectors cost $\beta$ arithmetic operations. While cost models targeting ring-based lattices somewhat ignore this cost factor to hedge against any use of rotation symmetry in the vectors derived from the ring elements, we consider this to be an inherent overhead when working with unstructured lattices.
+\end{itemize}
+
+These concessions to the adversary imply the use of the asymptotically fastest available SVP solvers, lattice sieves. In particular, we consider \cite{SODA:BDGL16} sieves using locality-sensitive filtering, and proposed quantum speedups using Grover's algorithm~\cite{AC:AGPS20} and quantum random walks~\cite{cryptoeprint:2024/1692}.
+
+Due to our focus on lattice sieving, we make two further considerations when estimating the cost of the primal and dual attacks.\todo{I don't think d4f and more-than-one sv are immediately compatible. \cite{AC:GuoJoh21} argues how to enable both by using two-step reduction.}
+\begin{itemize}
+	\item We assume that ``dimensions-for-free'' speedups~\cite{EC:Ducas18} hold at all times, meaning that in order to solve SVP in rank $\beta$, we only need to perform lattice sieving in rank $\beta \cdot \dff_\beta$ where $\dff_\beta = \left(1 - \frac{\log{(4/3)}}{\log{(\beta / (2 \pi e))}}\right)$.\todo{recheck this was the right factor}
+	\item We assume that lattice sieves in rank $\beta$ return $2^{0.2075 \beta}$ short vectors in the lattice,\todo{how short?} which is very useful at the moment of performing dual attacks.\todo{re-check wording given d4f. is the exponent right? and especially, `in rank $\beta$' is ambiguous}
+\end{itemize}
+
+With these simplifications, we obtain three cost models for lattice reduction outputting BKZ-$\beta$-reduced bases, corresponding directly to three models for the cost of solving SVP in rank $\beta$:
+\begin{itemize}
+	\item \clsfsieve, where SVP in rank $\beta$ costs $2^{0.292 \cdot \beta \cdot \dff_\beta + \log_2(\beta \cdot \dff_\beta)}$.
+	\item \qgroversieve, where SVP in rank $\beta$ costs $2^{0.265 \cdot \beta \cdot \dff_\beta + \log_2(\beta \cdot \dff_\beta)}$.
+	\item \qrandwalksieve, where SVP in rank $\beta$ costs $2^{0.257 \cdot \beta \cdot \dff_\beta + \log_2(\beta \cdot \dff_\beta)}$.
+\end{itemize}
+
+With these cost models available, we proceed to estimate the cost of the ``uSVP'' and ``BDD'' primal attacks, as well as the dual attack described above and the controversial~\cite{C:DucPul23,EC:PouShe24,cryptoeprint:2023/1850} ``dual-sieve-FFT''~\cite{AC:GuoJoh21,MATZOV22} variant. In Table~\ref{tab:new-core} we report the resulting cost estimates.
+
+\begin{table}
+	\centering
+	\resizebox{\textwidth}{!}{
+\begin{tabular}{lllrrrrrrrrrrrrrrrrrrr}
+	\hline
+	Params     & SVP model         & Reduction   &   uSVP cost &   uSVP beta &   uSVP dim &   BDD cost &   BDD red beta &   BDD svp beta &   BDD dim &   Dual cost &   Dual vecs (?) &   Dual beta &   Dual dim &   Dual hyb cost &   Dual guess (?) &   Dual N (?) &   Dual d/s indices (?) &   Dual fft indices (?) &   Dual red beta &   Dual sieve beta &   Dual LWE samples \\
+	\hline
+	Frodo-640  & q-rand-walk-sieve & core        &     122.966 &         486 &       1285 &    123.987 &            485 &            487 &      1288 &     127.857 &         113.979 &         506 &       1288 &         126.88  &          116.913 &      103.575 &                      0 &                      0 &             502 &               502 &                640 \\
+	Frodo-640  & q-grover-sieve    & core        &     126.52  &         486 &       1285 &    127.542 &            485 &            487 &      1288 &     131.561 &         113.979 &         506 &       1288 &         130.553 &          116.913 &      103.575 &                      0 &                      0 &             502 &               502 &                640 \\
+	Frodo-640  & c-lsf-sieve       & core        &     138.514 &         486 &       1285 &    139.541 &            485 &            487 &      1288 &     144.064 &         113.979 &         506 &       1288 &         142.954 &          116.913 &      103.575 &                      0 &                      0 &             502 &               502 &                640 \\
+	\hline
+	Frodo-967  & q-rand-walk-sieve & core        &     175.052 &         699 &       1934 &    176.052 &            699 &            699 &      1938 &     180.433 &         159.103 &         721 &       1942 &         179.699 &          161.083 &      148.29  &                      0 &                      0 &             718 &               718 &                967 \\
+	Frodo-967  & q-grover-sieve    & core        &     180.211 &         699 &       1934 &    181.211 &            699 &            699 &      1938 &     185.758 &         159.103 &         721 &       1942 &         185.001 &          161.083 &      148.29  &                      0 &                      0 &             718 &               718 &                967 \\
+	Frodo-967  & c-lsf-sieve       & core        &     197.621 &         699 &       1934 &    198.621 &            699 &            699 &      1938 &     203.728 &         159.103 &         721 &       1942 &         201.249 &          195.015 &      146.948 &                     10 &                      0 &             712 &               712 &                967 \\
+	\hline
+	Frodo-1344 & q-rand-walk-sieve & core        &     231.562 &         930 &       2577 &    232.583 &            929 &            931 &      2588 &     237.68  &         208.063 &         955 &       2656 &         225.934 &          206.56  &      188.035 &                      0 &                     80 &             907 &               907 &               1344 \\
+	Frodo-1344 & q-grover-sieve    & core        &     238.467 &         930 &       2577 &    239.489 &            929 &            931 &      2588 &     244.774 &         208.063 &         955 &       2656 &         231.521 &          227.855 &      186.476 &                      0 &                     80 &             902 &               902 &               1344 \\
+	Frodo-1344 & c-lsf-sieve       & core        &     261.769 &         930 &       2577 &    262.796 &            929 &            931 &      2588 &     268.715 &         208.063 &         955 &       2656 &         253.157 &          234.665 &      186.524 &                     10 &                     80 &             899 &               899 &               1344 \\
+	\hline
+\end{tabular}
+}
+\caption{\textcolor{red}{TODO: resolve discrepancy wrt number of returned vecs per sieve, style the table to make it readable.}\label{tab:new-core}}
+\end{table}
+
+\todo[inline]{Talk a little about the results, disclaiming quantum/classical etc.}
+\todo[inline]{May want to add a note about attacking the public-key versus the ciphertext.}
+
+\subsection{Beyond Core-SVP Methodology}
+
+While the core-SVP methodology can give us confidence on the baseline hardness of lattice reduction attacks, it is quite pessimistic about the effective security of lattice-based schemes. Having a good security buffer is important, since it is not possible to exclude future improvements in cryptanalysis. Relying only on core-SVP estimates may lead to an unnecessary over-specification of parameters to achieve such a buffer.
+
+In the third round of the NIST PQC standardization process, the designers of ML-KEM introduced a ``beyond core-SVP'' methodology~\cite{NISTPQC-R3:CRYSTALS-Kyber20}, that was also adopted by the $\Frodo$ team~\cite{NISTPQC-R3:FrodoKEM20}. Therein, they make various further assumptions on the practical hardness of lattice reduction, such as the difference between the costs of BKZ and progressive BKZ, the number of gates required to impement arithmetic operations, the possibility that lower-than-expected block sizes still lead to successful attacks.
+
+In this section we propose assumptions along similar lines. These are not a strict subset or superset of the assumptions made in~\cite{NISTPQC-R3:CRYSTALS-Kyber20}. Our intention is simply to propose a complementary look at possible attack overheads. In short, we consider the following.
+\begin{itemize}
+	\item Ignoring the number of SVP solver calls leads to a significant underestimate of the cost of lattice reduction, when most algorithms will need to call the solver in the order of thousands of times to reduce the primal and dual lattice bases. We instead consider that BKZ requires $8 \cdot (d - \beta)$ calls to an SVP solver to reduce a $d$-dimensional lattice. Progressive BKZ instead will require $\sum_{\beta' = 60 }^{\beta} d - \beta'$ calls to the SVP solver, where we consider SVP calls in rank $< 60$ to be of negligible cost.
+	\item Lattice sieving is a very memory intensive algorithm. Accounting for the extra memory cost requires more than a na\"ive area-times multiplication, since \cite{SODA:BDGL16} optimizes its filters for the RAM model. We adopt the recent analysis of the area-times cost of lattice sieving using two-dimensional memory architectures by Jaques~\cite{CiC:Jaques24}, which re-calibrates locality-sensitive filtering and recursive sieving to optimize costs. This result in the \cmemsieve cost model, where SVP in rank $\beta$ costs $2^{0.3113 \cdot \beta \cdot \dff_\beta + \log_2(\beta \cdot \dff_\beta)}$.
+	\item Due to the significant cost of memory in sieving, for sanity check we also estimate the cost of SVP solving via parallel pruned enumeration. To make a fair comparison with \cmemsieve, we compute the amount of memory required by \cmemsieve, and use Assumption~1 in~\cite{CiC:Jaques24} together with their case-study of the $\textsc{Cores/Memory}$ ratio for a nVidia GeForce RTX 4090 graphics card, to estimate the number of cores available for enumeration on a computer able to alternatively run lattice sieving as the SVP solver. We then take the asymptotically cheapest approximate-SVP solver known based on pruned enumeration~\cite{C:ABLR21}, and obtain the \cparaenum cost model, where SVP solving in rank $\beta$ costs $2^{0.1250 \beta \log_2 \beta - 0.654 \beta + 25.84 + \log_2(64)} / 2^{0.2075 \beta - \log_2(\textsc{Cores/Memory})}$. \todo{for enum, should we count the number of lattice vectors using d4f or not when comparing to sieving?}
+	\item We exclude from cost estimates the dual attack, as many of the proposed speedups have raised controversy~\cite{C:DucPul23,EC:PouShe24,cryptoeprint:2023/1850}, and there is a general lack of positive experimental results implementing it.\todo{make sure! I guess only \cite{EC:Albrecht17} does?}
+	\item It is currently unclear how feasible long-running quantum computations in the style of Grover's search or quantum random walks will be. Limiting circuit depth is believed to incur in a sharp loss of the quantum computing advantage~\cite{EC:JNRV20}, severely limiting the resulting speedups\cite{NISTPQC-R1:NTRU-HRSS-KEM17,AC:AonNguShe18} on pruned enumeration~\cite{C:BBTV24}. Similar loss of quantum advantage has also been predicted in the case of Grover and quantum-random-walk-based lattice sieving~\cite{AC:AGPS20,cryptoeprint:2024/1692}, due to memory access and correction costs, as well as limitations on circuit depth. We therefore ignore conjectured quantum speedups for lattice sieving.
+	\item \todo[inline]{if time suffices, do variance over winning $\beta$}
+	\item \todo[inline]{it we figure it out, do two-step paper estimates}
+\end{itemize}
+
+We then proceed to re-estimate the primal uSVP and BDD attacks, using the \clsfsieve, \cmemsieve and \cparaenum SVP cost models, assuming BKZ and Progressive BKZ lattice reduction. The results can be found in Table~\ref{tab:new-beyond}.
+
+\begin{table}
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lllrrrrrrr}
+			\hline
+			Params     & SVP model            & Reduction   &   uSVP cost &   uSVP beta &   uSVP dim &   BDD cost &   BDD red beta &   BDD svp beta &   BDD dim \\
+			\hline
+			Frodo-640  & c-lsf-sieve          & bkz         &     154.745 &         499 &       1288 &    149.846 &            478 &            512 &      1287 \\
+			Frodo-640  & 2d-ram-sieve         & bkz         &     163.555 &         499 &       1288 &    158.58  &            479 &            511 &      1286 \\
+			Frodo-640  & parallel-approx-enum & bkz         &     192.973 &         499 &       1288 &    187.26  &            484 &            505 &      1289 \\
+			Frodo-640  & c-lsf-sieve          & pbkz        &     154.269 &         499 &       1288 &    150.502 &            482 &            508 &      1285 \\
+			Frodo-640  & 2d-ram-sieve         & pbkz        &     162.995 &         499 &       1288 &    159.094 &            484 &            505 &      1289 \\
+			Frodo-640  & parallel-approx-enum & pbkz        &     191.92  &         499 &       1288 &    187     &            485 &            504 &      1289 \\
+			\hline
+			Frodo-967  & c-lsf-sieve          & bkz         &     216.411 &         719 &       1927 &    210.379 &            694 &            730 &      1941 \\
+			Frodo-967  & 2d-ram-sieve         & bkz         &     229.221 &         719 &       1927 &    223.056 &            695 &            729 &      1938 \\
+			Frodo-967  & parallel-approx-enum & bkz         &     297.37  &         719 &       1927 &    289.397 &            702 &            720 &      1942 \\
+			Frodo-967  & c-lsf-sieve          & pbkz        &     215.931 &         719 &       1927 &    210.915 &            698 &            725 &      1942 \\
+			Frodo-967  & 2d-ram-sieve         & pbkz        &     228.657 &         719 &       1927 &    223.437 &            698 &            725 &      1942 \\
+			Frodo-967  & parallel-approx-enum & pbkz        &     296.139 &         719 &       1927 &    288.754 &            702 &            720 &      1942 \\
+			\hline
+			Frodo-1344 & c-lsf-sieve          & bkz         &     282.932 &         957 &       2576 &    275.441 &            928 &            962 &      2628 \\
+			Frodo-1344 & 2d-ram-sieve         & bkz         &     300.082 &         957 &       2576 &    292.272 &            928 &            962 &      2628 \\
+			Frodo-1344 & parallel-approx-enum & bkz         &     424.015 &         957 &       2576 &    412.795 &            935 &            954 &      2606 \\
+			Frodo-1344 & c-lsf-sieve          & pbkz        &     282.449 &         957 &       2576 &    275.951 &            930 &            960 &      2604 \\
+			Frodo-1344 & 2d-ram-sieve         & pbkz        &     299.516 &         957 &       2576 &    292.753 &            931 &            959 &      2598 \\
+			Frodo-1344 & parallel-approx-enum & pbkz        &     422.664 &         957 &       2576 &    412.089 &            936 &            953 &      2600 \\
+			\hline
+		\end{tabular}
+	}
+	\caption{\textcolor{red}{TODO: add two-step attack, style the table to make it readable.}\label{tab:new-beyond}}
+\end{table}
+
+\FloatBarrier
+
+\section{Cryptanalytic attacks}%
+\label{sec:attack:cryptanalytic}
+
+\begin{table}
+\begin{center}
+\caption{\textbf{Primal and dual attacks on a single instance of an LWE problem.} Attack costs are given as the base-$2$ logarithm.}\label{tab:attacks}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.3cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c|ccc}
+\toprule
+Scheme & Attack Mode & Classical & Quantum & Plausible \\
+\midrule
+\multirow{2}{*}{\FrodoLOne} & Primal & 150.8 & 137.6 & 109.6 \\
+& Dual & 149.6 & 136.5 & 108.7 \\
+\midrule
+\multirow{2}{*}{\FrodoLThree} & Primal & 216.0 & 196.7 & 156.0 \\
+& Dual & 214.5 & 195.4 & 154.9 \\
+\midrule
+\multirow{2}{*}{\FrodoLFive} & Primal & 281.6 & 256.3 & 202.6 \\
+& Dual & 279.8 & 254.7 & 201.4 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+\NISTdescription{The submission package shall include a statement that summarizes the known cryptanalytic attacks on the scheme, and provides estimates of the complexity of these attacks.}
+
+\NISTdescription{The submitter shall provide a list of references to any published materials describing or analyzing the security of the submitted algorithm or cryptosystem. When possible, the submission of copies of these materials (accompanied by a waiver of copyright or permission from the copyright holder for public evaluation purposes) is encouraged.}
+
+In this section, we explain our methodology to estimate the security
+level of our proposed parameters. The methodology is similar to the
+one proposed in~\cite{USENIX:ADPS16}, with slight modifications taking
+into account the fact that some quasi-linear
+accelerations~\cite{AFRICACRYPT:Schneider13,BNP_IJAC16} over sieving
+algorithms~\cite{SODA:BDGL16,LaarhovenThesis} are not available
+without the ring structure.
+
+We also remark that this methodology is significantly more
+conservative than what is usually used in the
+literature~\cite{albrecht15:_concrete_lwe}, at least since
+recently. Indeed, we must acknowledge that lattice cryptanalysis is
+far less mature than that for factoring and computing discrete
+logarithms, for which the best-known attacks can more safely be
+considered best-possible attacks.
+
+
+\paragraph{Concrete parameters.}
+
+\cpnote{See if we need to retain this paragraph, and what it would best belong.}
+
+Concretely, for the extremely large bound $N = 2^{256}$ on the
+number of discrete Gaussian samples, the threshold for Gaussian
+parameters~$\alpha q$ that conform to \autoref{thm:bddwdgs-to-dlwe} is
+$\sqrt{\ln(N)/(2\pi)} \approx 5.314$, which corresponds to a standard
+deviation threshold of $\sqrt{\ln(N)}/(2\pi) \approx 2.120$.  Our
+$\FrodoPKE$ parameters for security Levels~1 and 3, which use standard
+deviation $\sigma \geq 2.3$ (see \autoref{tab:distribution}), exceed
+this threshold by a comfortable margin.  (Indeed, $\sigma = 2.3$
+corresponds to $N \approx 2^{300}$.) For efficiency reasons, our
+parameters for security Level~5 use a somewhat smaller standard
+deviation of $\sigma = 1.4$; this corresponds to the very large bound
+$N \approx 2^{111}$. While this~$N$ is smaller than the running time
+for the Level 5 brute-force security level, we stress that these two
+quantities are not comparable; $N$ is merely a bound on the
+\emph{number of samples} provided in a $\BDDwDGS$ input, and it
+controls the decoding distance for known efficient algorithms. 
+
+
+\subsubsection{Methodology: the core-SVP hardness}
+\label{subsec:coreSVPharness}
+
+In this section, let $\numsamp$ denote the number of LWE samples
+available to the attacker. Due to the small number of samples (i.e., $\numsamp \approx n$
+in our schemes) we are not concerned with either BKW types of
+attacks~\cite{C:KirFou15} or linearization attacks~\cite{ICALP:AroGe11}. This essentially leaves us with two BKZ~\cite{AC:CheNgu11} attacks, usually referred to as primal and dual attacks that we will briefly recall below.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%% TO CHECK
+%\patrick{TODO: discuss this issue later. Lewis's email: As far as I know, BKW and linearization attack estimates are included in Martin's lattice estimator, as well as the Matzov optimizations. If we make sense of the estimator results and incorporate them/replace the estimates in the paper, we could clear both remaining issues. Otherwise, we can just remove or clarify the sentences in the screenshot I've attached.} 
+
+%\lewis{This section is the same as 5.2.1 in the specifications document. I don't think it holds up if we care about multi-challenge security, as we can no longer assume a small number of samples.}
+
+
+Formally, BKZ with block-size~$b$ requires up to polynomially many
+calls to an SVP oracle in dimension~$b$, but some heuristics allow to
+decrease the number of calls to be essentially
+linear~\cite{ChenThesis}. To account for further improvement, we shall
+count only the cost of one such call to the SVP oracle: the core-SVP
+hardness. Such precaution is motivated by the fact that there are ways
+to amortize the cost of SVP calls inside BKZ, especially when sieving
+is to be used as the SVP oracle. Such a strategy was suggested in a
+talk, but has so far not been experimentally tested, as more
+implementation effort is required to integrate sieving within BKZ.
+
+Even evaluating the concrete cost of one SVP oracle call in
+dimension~$b$ is difficult, because the numerically optimized pruned
+enumeration strategy does not yield a closed
+formula~\cite{EC:GamNguReg10,AC:CheNgu11}. Yet, asymptotically,
+enumeration is super-exponential (even with pruning), while sieving
+algorithms are exponential $2^{cb + o(b)}$ with a well understood
+constant $c$ in the exponent. A sound and simple strategy is therefore
+to give a lower bound for the cost of an attack by $2^{cb}$ vector
+operations (i.e., about $b 2^{cb}$ CPU cycles\footnote{Because of the
+  additional ring structure, \cite{USENIX:ADPS16} chooses to ignore
+  this factor $b$ to the advantage of the adversary, assuming the
+  techniques of~\cite{AFRICACRYPT:Schneider13,BNP_IJAC16} can be
+  adapted to more advanced sieve algorithms~\cite{USENIX:ADPS16}. But
+  for plain LWE, we can safely include this factor.}), and to make
+sure that the block-size~$b$ is in a range where enumeration costs
+more than~$2^{cb}$. From the estimates of~\cite{AC:CheNgu11}, it is
+argued in~\cite{USENIX:ADPS16} that this is the case both classically
+and quantumly whenever $b \geq 200$.
+
+The best known constant in the exponent for classical algorithms is
+$c_{\text{C}} = \log_2 \sqrt{3/2} \approx 0.292$, as provided by the
+sieve algorithm of~\cite{SODA:BDGL16}.  For quantum algorithms it is
+$c_{\text{Q}} = \log_2 \sqrt{13/9} \approx
+0.265$~\cite[Sec. 14.2.10]{LaarhovenThesis}. Because all variants of
+the sieve algorithm require building a list of $\sqrt{4/3}^b$ many
+vectors, the constant
+$c_{\text{P}} = \log_2 \sqrt{4/3} \approx {.2075}$ can plausibly serve
+as a ``worst-possible'' lower bound for sieving algorithms.
+
+\paragraph{Conservatism: lower bounds vs. experiments.}
+
+These estimates are very conservative compared to the state of the art
+implementation of~\cite{mariano2017parallel}, which has practical
+complexity of about $2^{0.405 b + 11}$ cycles in the range
+$b=60 \dots 80$. The classical lower bound of $2^{0.292b}$ corresponds
+to a margin factor of $2^{20}$ at blocksize $b=80$, and this margin
+should continue increasing with the blocksize (abusing the linear fit
+suggests a margin of $2^{45}$ at blocksize $b=300$).
+
+\paragraph{Conservatism: future improvements.}
+
+Of course, one could assume further improvements on known techniques.
+At least asymptotically, it may be reasonable to assume that
+$2^{0.292 b + o(b)}$ is optimal for SVP considering that the
+underlying technique of~\cite{SODA:BDGL16} has been shown to reach
+lower bounds for the generic nearest-neighbor search
+problem~\cite{SODA:ALRW17}.  As for concrete improvements, we note
+that this algorithm has already been subject to some fine-tuning
+in~\cite{mariano2017parallel}, so we may conclude that there is not
+much more to be gained without introducing new ideas. We therefore
+consider our margin sufficient to absorb such future improvements.
+
+\paragraph{Conservatism: cost models.}
+
+The NIST call for proposals~\cite{NIST17} suggested a particular cost model,
+inspired by the estimates of a Grover search attack on AES,
+essentially accounting for the quantum gate count. In comparison, the
+literature on sieving algorithms mostly focuses on analysis in the RAM
+model and quantumly accessible RAM models, and considers the amount of
+memory they use. Their cost in the area-time model should be higher by
+polynomial, if not exponential, factors.
+
+Firstly, our model accounts for arithmetic operations rather than
+gates (used to compute inner products and evaluate norms of
+vectors). The conversion to gate count may not be trivial as it is
+unclear how many bits of precision are required.
+
+Secondly, even in the classical setting, the cost of sieving in large
+dimensions may not be accurately captured by the count of elementary
+operations in the RAM model, as those algorithms use an exponential
+amount of memory. Admittedly, the most basic sieve algorithm (with
+theoretical complexity $2^{0.415b + o(b)}$) has sequential memory
+access, and can therefore be efficiently implemented by a large
+circuit without memory access delays. But more advanced
+ones~\cite{SODA:BDGL16} have much less predictable memory access
+patterns, and memory complexities as large as time complexities
+($2^{0.292 b + o(b)}$). It is unclear if they can be adapted to reach
+a complexity $2^{0.292 b + o(b)}$ in the area-time model; one might
+expect extra polynomial factors to appear. (Following an idea
+of~\cite{EPRINT:BecGamJou15}, Becker et al.~\cite{SODA:BDGL16} also
+claim a version that only requires $2^{0.2015b + o(b)}$ memory, but
+we suspect this would come at some hidden cost on the running time.)
+
+Moreover, the quantum versions of all sieving algorithms work in the
+quantumly accessible RAM model~\cite{LMP15}. Again, the conversion to
+an efficient quantum circuit will induce extra costs---at least
+polynomial ones.
+
+\subsubsection{Primal attack}
+
+The primal attack consists of constructing a unique-SVP instance from
+the LWE problem and solving it using BKZ. We examine how large the
+block dimension $b$ is required to be for BKZ to find the unique
+solution. Given the matrix LWE instance
+$( \bfA,\bfb = \bfA \bfs + \bfe)$ one builds the lattice
+$\Lambda = \{ \bfx \in \mathbb Z^{m+n+1} : ( \bfA | \bfI_m | - \bfb)
+\bfx = 0 \bmod q \}$ of dimension $d = m + n + 1$, volume $q^m$, and
+with a unique-SVP solution $\bfv = (\bfs, \bfe, 1 )$ of norm
+$\lambda \approx \sigma \sqrt{n+m}$. The number of used samples $m$
+may be chosen between $0$ and $\numsamp$, and we numerically optimize
+this choice.
+
+Using the typical models of BKZ (geometric series assumption, Gaussian
+heuristic~\cite{ChenThesis,albrecht15:_concrete_lwe}) one concludes
+that the primal attack is successful if and only if
+\begin{equation}
+  \label{eqn:primal_attack_cond}
+  \sigma \sqrt b \leq \delta^{2b-d -1} \cdot q^{m/d} \quad \text{ where } \delta = ((\pi b)^{1/b} \cdot b/(2\pi e))^{1/(2b-2)} \enspace .
+\end{equation}
+
+We note that this condition, introduced in~\cite{USENIX:ADPS16}, is
+substantially different from the one suggested in~\cite{EC:GamNgu08}
+and used in many previous security analyses, such
+as~\cite{albrecht15:_concrete_lwe}. The recent study~\cite{AC:AGVW17}
+showed that this new condition predicts significantly smaller security
+levels than the older, and is corroborated by extensive experiments.
+
+\subsubsection{Dual attack}
+\label{sec:dual-attack}
+
+The dual attack searches for a short nonzero vector in the lattice
+$\hat \Lambda = \{ (\bfv, \bfw) \in \mathbb{Z}^{n + m} : \bfv^{t} =
+\bfw^{t} \bfA \pmod q\}$ of dimension $d=n+m$ and volume~$q^{n}$,
+which is generated by the rows of the basis matrix
+\[ \bfB =
+  \begin{pmatrix}
+    q \bfI_{n} & \\ \bar \bfA & \bfI_{m}
+  \end{pmatrix}  \in \mathbb{Z}^{(n+m) \times (n+m)} ,
+\]
+where each entry of~$\bar \bfA$ is an arbitrary mod-$q$ integer
+representative of the corresponding entry of~$\bfA$.  As above, the
+BKZ algorithm with block size~$b$ will output such a vector of length
+$\ell \approx \delta^{d-1} q^{n/d}$. The dual attack then uses this
+vector as a distinguisher for LWE, as described next.
+
+For convenience we actually analyze the attack against a
+\emph{continuous} form of LWE, with Gaussian~$\bfs, \bfe$ over the
+reals~$\mathbb{R}$. An instance of this problem has the form
+$(\bfA, \bfb)$, where $\bfb \in (\mathbb{R}/q\mathbb{Z})^{n + m}$
+either is uniformly random and independent of~$\bfA$, or has the form
+\[
+  \bfb =
+  \begin{pmatrix}
+    \bfb_{1} \\ \bfb_{2}
+  \end{pmatrix}
+  = \bfB \cdot
+  \begin{pmatrix}
+    \bfs \\ \bfe
+  \end{pmatrix} =
+  \begin{pmatrix}
+    q \cdot \bfs \\ \bar \bfA \bfs + \bfe
+  \end{pmatrix}
+  \bmod q \mathbb{Z}^{n + m} , \] where the entries of
+$(\bfs, \bfe) \in \mathbb{R}^{n + m}$ are independent continuous
+Gaussians of standard deviation~$\sigma$. Because there is a trivial
+reduction from this LWE decision problem to the discrete one of
+interest that has \emph{rounded Gaussian}~$\bfs, \bfe$
+(over~$\mathbb{Z}$), the latter problem is no easier than the
+former.\footnote{The reduction just replaces $\bfb$ with
+  $\round{\bfb_{2} - \bar \bfA (\bfb_{1}/q \bmod \mathbb{Z}^{n})} \in
+  \mathbb{Z}_{q}^{m}$, where the $\bmod$ operation returns the unique
+  representative (i.e., fractional part) in $[-1/2, 1/2)^{n}$, and
+  $\round{\cdot}$ rounds to the nearest integer by subtracting the
+  fractional part. This reduction maps the (continuous) uniform
+  distribution to the (discrete) uniform distribution, and in the LWE
+  case, subtracts $\bar \bfA$ times the fractional part of~$\bfs$ and
+  rounds away the fractional part of~$\bfe$, yielding
+  $\bar \bfA \round{\bfs} + \round{\bfe} \bmod q\bbZ^{m}$.}
+
+Having found some $(\bfv,\bfw) \in \hat\Lambda$ of length $\ell$, the
+attacker computes
+\[ z = (\bfv^{t}, \bfw^{t}) \cdot \bfB^{-1} \cdot \bfb = q^{-1}
+  (\bfv^{t} - \bfw^{t} \bar \bfA) \cdot \bfb_{1} + \bfw^{t} \cdot
+  \bfb_{2} \bmod q , \] and attempts to distinguish it from uniformly
+random over $\mathbb{R}/q\mathbb{Z}$. Its advantage in doing so can be
+bounded as follows. First, suppose that $\bfb = \bfB \cdot \left(
+  \begin{smallmatrix}
+    \bfs \\ \bfe
+  \end{smallmatrix}
+\right)$ is from a continuous LWE instance as defined above. Then
+\[ z = (\bfv^{t}, \bfw^{t}) \cdot
+  \begin{pmatrix}
+    \bfs \\ \bfe
+  \end{pmatrix} \bmod q \] is distributed as a Gaussian of standard
+deviation $\ell \sigma$, modulo~$q$. On the other hand, if~$\bfb$ is
+uniformly random, then~$z$ is uniformly random
+in~$\mathbb{R}/q\mathbb{Z}$. By the results
+of~\cite{DBLP:journals/siamcomp/MicciancioR07}, these two
+distributions have statistical distance at most $\eps = 2\delta$ for
+$\delta = \exp(-2\pi^2 \tau^2) < 1/8$ where $\tau = \ell \sigma / q$,
+so this~$\eps$ bounds the distinguishing advantage.
+
+Because the value~$\mu$ encrypted by the underlying $\FrodoPKE$ (using
+LWE) actually serves as a seed to pseudorandomly generate the
+$\FrodoKEM$ KEM key $\ssk$ (see \autoref{alg:KEM:Encaps}), a small
+advantage~$\eps$---say, below $1/2$---in distinguishing~$\mu$ from a
+uniform random string does not significantly decrease the brute-force
+search space.
+% Note that small advantages~$\eps$ are not meaningful to attack a KEM:
+% \cpnote{I'm not sure this argument holds much water, since with
+%   FrodoKEM one would just directly use the KEM key it produces. Maybe
+%   we should make the argument that for distinguishing problems, we
+%   need a $1/\eps^{2}$ factor to measure bit security?}
+% \dsnote{This paragraph is also a bit confusing to me.  The security notion we have to meet for the KEM is IND, and distinguishing the LWE instance with advantage $\epsilon$ basically means distinguishing KEM keys with advantage $\epsilon$.  This paragraph more seems to be arguing IND isn't the right notion, since we're going to compose the KEM key with a symmetric encryption scheme, and so you really need session key recovery (one way ness, OW) in order to break the symmetric encryption scheme.  There is something to that argument, but OW is not what we were asked to provide, IND is.  I don't really understand the last part about the $2^{.2075b}$ vectors and how that fits in, so I don't have a comment on that.}
+% because the
+% agreed-upon key is to be used as a symmetric cipher key, any advantage
+% below $1/2$ does not significantly decrease the brute-force search
+% space. (To make this more formal, one may simply hash the agreed-upon
+% key with a random oracle before using it for any other purpose.)
+%
+We therefore require the attacker to amplify its distinguishing
+advantage by obtaining about $1/\eps^2$ short lattice vectors, which
+we can model (most favorably to the attacker) as being Gaussian
+distributed and independent.
+%
+% \cpnote{This amplification argument is not satisfactory
+%   either, because we lack \emph{independence} due to the fixed choice
+%   of $\bfe$. If we model the sieve algorithms as producing independent
+%   Gaussian-distributed vectors then the inner products are
+%   independent. But I don't know if this is a legitimate model, or if
+%   we even would want to use it. Just using a $1/\eps^{2}$ factor for
+%   bit security in distinguishing problems seems like the better way to
+%   go.}
+Because the lattice-sieve algorithms provide about $2^{.2075 b}$
+vectors, the dual attack must be repeated at least
+$R = \max(1, 1/(2^{.2075 b} \eps^2))$ times. (This view is also
+favorable to the attacker, as the other vectors output by the sieving
+algorithm are a bit larger than the shortest one.)
+
+Primal and dual attacks for our suggested parameters are given in
+\autoref{tab:attacks}.  The costs are listed for a single instance of
+the LWE problem. (Our ultimate security claims, such as those listed
+in \autoref{tab:security}, result from a series of reductions and thus
+are weaker.)
+
+
+
+
+\subsubsection{Beyond core-SVP hardness}
+\label{sec:beyond-core}
+
+At the time the core-SVP hardness measure was introduced by~\cite{USENIX:ADPS16}, the best implementations of sieving~\cite{SODA:BDGL16,mariano2017parallel} had performance significantly worse than the $2^{.292b}$ CPU cycles proposed as a conservative estimate by this methodology. This was due to substantial polynomial, or even sub-exponential, overheads hidden in the $2^{.292b + o(b)}$ complexity given in the analysis of~\cite{SODA:BDGL16}. Before~\cite{USENIX:ADPS16}, security estimates of lattice schemes were typically based on the cost of solving SVP via enumeration as given in~\cite{AC:CheNgu11,albrecht15:_concrete_lwe}, leading to much more aggressive parameters. Beyond affecting the cost of SVP-calls, this methodology also introduced a different prediction of when BKZ solves LWE which was later confirmed by~\cite{AC:AGVW17} and refined in~\cite{dachman2020lwe}.
+
+While doubts were expressed to whether enumeration~\cite{AC:CheNgu11} with its super-exponential, yet practically smaller, costs would ever be outperformed by sieving for relevant cryptographic dimensions, significant progress on sieving algorithms~\cite{ducas2018shortest,albrecht2019general} has brought the cross-over point down to dimension about $b = 80$. In fact, the current SVP records are now held by algorithms that employ sieving.\footnote{\url{https://www.latticechallenge.org/svp-challenge/}} These developments mandate a revision and refinement of security estimates for the \FrodoKEM parameters, especially regarding classical attacks. In particular, while experiments indicated that, before those improvements were made, the costs hidden in the $o(b)$ were positive both in practice and asymptotically, the dimensions-for-free technique of~\cite{ducas2018shortest} offers a sub-exponential speed-up, making it a priori unclear whether the total $o(b)$ term is positive or negative, both asymptotically and concretely.
+
+We follow the same methodology as the one detailed in the Round-3 specification document of the Kyber key encapsulation mechanism \cite{EuroSP:Kyber} to count the number of gates required to solve the LWE problem. This analysis refines the core-SVP methodology in the following ways:
+\begin{itemize}
+	\item It uses the probabilistic simulation of~\cite{dachman2020lwe} rather than the GSA-intersect model of~\cite{USENIX:ADPS16,AC:AGVW17} to determine the BKZ blocksize $b$ for a successful attack. The required blocksize is somewhat larger (by an added term between $10$ and $25$ for our parameters), because of a ``tail'' phenomenon~\cite{yu2017second}.
+	\item It accounts for the ``few dimensions for free'' introduced in~\cite{ducas2018shortest}, which permits to solve SVP in dimension $b$ while running sieving in a somewhat smaller dimension $b' = b-o(b)$.
+	\item It relies on the concrete estimation for the gate cost of sieving from~\cite{albrecht2019estimating}.
+	\item It accounts for the number of calls to the SVP oracle.
+	\item It dismisses the dual attack as realistically more expensive than the primal one, noting that the analysis of~\cite{USENIX:ADPS16} (also used here) assumes that the sieve provides $2^{.208b}$ many vectors as short as the shortest one. But first, most of those vectors are larger by a factor of $\sqrt{4/3}$, and second, the trick of exploiting all of those vectors is not compatible with the ``dimension-for-free'' trick of~\cite{ducas2018shortest}.
+\end{itemize}
+The scripts for these refined estimates are provided in a git branch of the leaky-LWE-estimator of~\cite{dachman2020lwe},\footnote{\url{https://github.com/lducas/leaky-LWE-Estimator/tree/NIST-round3}} and lead to the estimates given in Table~\ref{tab:refined_LWE}. We refer to the Kyber Round-3 specification document for the details of this analysis. We point out that it is paired with a detailed discussion of the ``known unknowns'', providing a plausible confidence interval for these estimates. For the classical hardness of the LWE problem at Levels 1 and 2, it is estimated in the Kyber Round-3 document that the true cost is no more than $16$ bits away from this estimate, in either direction. 
+
+We also note that a similarly refined count of quantum gates seems to be essentially irrelevant: the work of \cite{albrecht2019estimating} concluded that obtaining a quantum speed-up for sieving is rather tenuous, while the quantum security target for each level is significantly lower than the classical target. 
+
+
+\begin{table}[H]
+\begin{center}
+\caption{Refined estimates for the LWE hardness, where $n$ is the optimal lattice dimension for the attack,  
+$b$ the BKZ blocksize and $b'$ the sieving dimension accounting for ``dimensions for free''}\label{tab:refined_LWE}
+\medskip
+\centering
+\renewcommand{\tabcolsep}{0.3cm}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{l|c|c|c|c|c}
+\toprule
+             & $n$    &  $b$  & $b'$  & $\log_2(\text{gates})$   & $\log_2(\text{memory in bits})$ \\ 
+\midrule
+\FrodoLOne 	& 1297	& 496	& 453	& 175.1 	& 110.4 \\
+\FrodoLThree 	& 1969	& 724	& 668	& 240.0 	& 155.8 \\
+\FrodoLFive 	& 2634	& 957	& 888	& 305.4 	& 202.1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+The refined analysis above covers recent improvements for solving the SVP and models the current state of the art. The resulting gate counts show that the \FrodoKEM parameter sets comfortably match their respective target security levels with a large margin. While these numbers might encourage parameter modifications to more closely match security targets and improve performance and bandwidth, we prefer to leave parameter sets unchanged. This aligns with \FrodoKEM's conservative design approach and hedges against improvements for cryptanalytic algorithms solving general lattice problems. 
+
+
+\subsubsection{Decryption failures}\label{sec:failures}
+
+The concrete $\FrodoPKE$ parameters induce a tiny probability of
+incorrect decryption (see \autoref{tab:security}), for honestly
+generated keys and ciphertexts. This is because a ciphertext may
+decrypt to a different message than the encrypted one, if the
+combination of the short error matrices in the key and the ciphertext
+is too large (see \autoref{sec:cpa-pke-correctness}).  This
+aspect of the scheme carries over to the transformed, CCA-targeting
+$\FrodoKEM$, where incorrect decryption in the underlying PKE
+typically causes a decryption failure.
+
+It has long been well understood that the ability to induce incorrect
+decryption or decryption failure in LWE-based schemes can leak
+information about the secret key, up to and including full key
+recovery (with sufficiently many failures). In brief, this is because
+such failures indicate some correlation between the secret key and the
+encryption randomness.
+
+In the context of chosen-ciphertext attacks on $\FrodoKEM$ and
+similarly transformed schemes, the attacker can attempt to create
+ciphertexts whose underlying error matrices---which are derived
+pseudorandomly using an attacker-chosen seed---are atypically
+large. Such ``weak'' ciphertexts have an increased probability of
+inducing decryption failures when submitted to a decryption
+oracle. The process of searching for such ciphertexts, which can be
+done offline (without using a decryption oracle), is known as
+``failure boosting.''
+
+In 2019, D'Anvers et al.~\cite{PKC:DGJNVV19} performed a detailed study of
+the complexity of failure-boosting attacks (in both the classical and
+quantum setting) against a variety of NIST candidates, including
+$\FrodoKEM$. In summary, they found that the Level 3
+parameterization $\FrodoLThree$ suffered \emph{no loss} in its
+claimed security (either classical or quantum) under such
+attacks. This is essentially because the cost of finding weak
+ciphertexts exceeds the benefit obtained from the corresponding
+increase in decryption failure probability.
+
+We ran the scripts from~\cite{PKC:DGJNVV19} on the
+parameters for $\FrodoLOne$, $\FrodoLThree$, and $\FrodoLFive$ described in this work, and
+confirmed that applying the failure-boosting attack does not violate security
+Levels 1, 3, and 5, respectively. (Note that for $\FrodoLFive$,
+failure boosting did not provide any improvement over the intrinsic
+failure probability of $2^{-252.5}$. We consider this to be consistent
+with the Level 5 requirement of 256 bits of brute-force security, because the overhead in using
+decryption failures to win the CCA security game exceeds 3.5 bits.)
+
+
+%\lewis{I deleted the section on multi-target and multi-ciphertext security. I rolled these two into a single notion of multi-challenge security and included it into the main text. I may be biased, since multi-challenge security is something I have worked on, and may have dedicated too much of the paper to explaining why it is significant. I do, however, think it is an important selling point for FrodoKEM, and important to get across why we are submitting this paper now.}
+%
+%
+%
+%\lewis{I deleted the subsection "Proofs for the salted FO transform. We don't need to explain how to adapt theorem 3.1 and theorem 3.2 for our purposes, because the multi-challenge security theorems give us single target security bounds as well. One only have to set $n$ and $u$ to be 1. Instead I included the multi-challenge security bounds in the main text.}
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:

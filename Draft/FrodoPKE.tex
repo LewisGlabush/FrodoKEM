@@ -1,0 +1,241 @@
+\section{$\FrodoPKE$: \INDCPA-secure public-key encryption}%
+\label{sec:cpa-pke}
+
+This section describes $\FrodoPKE$, a public-key encryption scheme
+with fixed-length message space, targeting \INDCPA security, that will
+be used as a building block for $\FrodoKEM$. $\FrodoPKE$ is based on
+the public-key encryption scheme by Lindner and Peikert~\cite{RSA:LinPei11}.
+
+%with the following adaptations and
+%specializations:
+%\begin{itemize}
+%\item The matrix $\bfA$ is generated from a seed using the function $\Frodo.\gen$ specified in \autoref{sec:genA}.
+%\item Several ($\mbar$) ciphertexts are generated at once.
+%\item The same Gaussian-derived error distribution is used for both
+%  key generation and encryption.
+%\end{itemize}
+
+The PKE scheme is given by three algorithms
+$(\FrodoPKE.\KeyGen, \FrodoPKE.\Enc,$ $\FrodoPKE.\Dec)$, defined
+respectively in \autoref{alg:PKE:KeyGen}, \autoref{alg:PKE:Enc}, and
+\autoref{alg:PKE:Dec}.  
+$\FrodoPKE$ is parameterized by the parameters defined in \autoref{sec:algs}.
+Additional parameters include the bit length of messages $\lengthm = \ell$, the message space $\MsgSp = \{0,1\}^\lengthm$,
+and the matrix-generation algorithm $\Frodo.\gen$ (either \autoref{alg:genA_AES} or \autoref{alg:genA_SHAKE}).
+%
+%$\FrodoPKE$ is parameterized by the following parameters:
+%\begin{itemize}
+%\item $q=2^D$, a power-of-two integer modulus with exponent $D \leq 16$;
+%\item $n, \mbar, \nbar$, integer matrix dimensions with $n \equiv 0 \pmod 8$;
+%\item $B \leq D$, the number of bits encoded in each matrix entry;
+%\item $\ell=B\cdot \mbar\cdot\nbar$, the length of bit strings that are encoded as $\mbar$-by-$\nbar$ matrices;
+%\item $\lengthm = \ell$, the bit length of messages;
+%\item $\MsgSp = \{0,1\}^\lengthm$, the message space;
+%\item $\lengthseedA$, the bit length of seeds used for pseudorandom matrix generation;
+%\item $\lengthseedSE$, the bit length of seeds used for pseudorandom bit generation for error sampling;
+%\item $\Frodo.\gen$, the matrix-generation algorithm, either \autoref{alg:genA_AES} or \autoref{alg:genA_SHAKE};
+%\item $T_\chi$, the distribution table for sampling.
+%\end{itemize}
+%
+In the notation of~\cite{RSA:LinPei11}, their~$n_1$ and~$n_2$ both
+equal~$n$ here, and their dimension~$\ell$ is~$\nbar$ here.
+
+
+\begin{algorithm}[t]
+\caption{\label{alg:PKE:KeyGen} $\FrodoPKE.\KeyGen$.}
+{\bf Input:} None.\\
+{\bf Output:} Key pair $(\pk, \sk) \in (\{0,1\}^\lengthseedA \times \mathbb{Z}_q^{n \times \nbar})\times \mathbb{Z}_q^{\nbar \times n}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE Choose a uniformly random seed $\seedA \getsr U(\{0,1\}^\lengthseedA)$
+    \STATE Generate the matrix $\bfA \in \bbZ_q^{n \times n}$ via $\bfA\gets\Frodo.\gen(\seedA)$
+    \STATE Choose a uniformly random seed $\seedSE \getsr U(\{0,1\}^\lengthseedSE)$
+    \STATE Generate pseudorandom bit string $ (\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(2n\nbar-1)}) \gets \SHAKE(\mathtt{0x5F} \| \seedSE,$ $2n\nbar \cdot \lengthchi)$
+    \STATE Sample error matrix $\bfS^\text{T} \gets \Frodo.\SampV((\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(n\nbar-1)}), \nbar, n, T_\chi)$
+    \STATE Sample error matrix $\bfE \gets \Frodo.\SampV((\bfr^{(n\nbar)}, \bfr^{(n\nbar+1)}, \dots, \bfr^{(2n\nbar-1)}), n, \nbar, T_\chi)$
+    \STATE Compute $\bfB = \bfA\bfS + \bfE$
+    \RETURN public key $\pk \gets (\seedA, \bfB)$ and secret key $\sk \gets \bfS^\text{T}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[]
+\caption{\label{alg:PKE:Enc} $\FrodoPKE.\Enc$.}
+{\bf Input:} Message $\mu \in \calM$ and public key $\pk = (\seedA, \bfB) \in \{0,1\}^\lengthseedA \times \bbZ_q^{n \times \nbar}$.\\
+{\bf Output:} Ciphertext $c = (\bfC_1, \bfC_2) \in \bbZ_q^{\mbar\times n}\times \bbZ_q^{\mbar\times\nbar}$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE Generate $\bfA\gets \Frodo.\gen(\seedA)$
+    \STATE Choose a uniformly random seed $\seedSE \getsr U(\{0,1\}^\lengthseedSE)$
+     \STATE Generate pseudorandom bit string $ (\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(2\mbar n+\mbar\nbar-1)}) \gets \SHAKE(\mathtt{0x96} \|$ $\seedSE, (2\mbar n+\mbar\nbar) \cdot \lengthchi)$
+    \STATE Sample error matrix $\bfS' \gets \Frodo.\SampV((\bfr^{(0)}, \bfr^{(1)}, \dots, \bfr^{(\mbar n-1)}), \mbar, n, T_\chi)$
+    \STATE Sample error matrix $\bfE' \gets \Frodo.\SampV((\bfr^{(\mbar n)}, \bfr^{(\mbar n+1)}, \dots, \bfr^{(2\mbar n-1)}), \mbar, n,$ $T_\chi)$
+    \STATE Sample error matrix $\bfE'' \gets \Frodo.\SampV((\bfr^{(2\mbar n)}, \bfr^{(2\mbar n+1)}, \dots, \bfr^{(2\mbar n+\mbar\nbar-1)}),$ $\mbar, \nbar, T_\chi)$
+    \STATE Compute $\bfB' = \bfS'\bfA + \bfE'$ and $\bfV = \bfS'\bfB + \bfE''$
+    \RETURN ciphertext $c \gets (\bfC_1, \bfC_2)=(\bfB', \bfV + \Frodo.\Encode(\mu))$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[t]
+\caption{\label{alg:PKE:Dec} $\FrodoPKE.\Dec$.}
+{\bf Input:} Ciphertext $c=(\bfC_1, \bfC_2)  \in \bbZ_q^{\mbar\times n}\times \bbZ_q^{\mbar\times\nbar}$ and secret key $\sk = \bfS^\text{T} \in \mathbb{Z}_q^{\nbar \times n}$.\\
+{\bf Output:} Decrypted message $\mu' \in \calM$.\\[-1.5ex]
+\rule{\linewidth}{.5pt}
+\vspace{-0.5cm}
+\begin{algorithmic}[1]
+    \STATE Compute $\bfM = \bfC_2 - \bfC_1\bfS$
+    \RETURN message $\mu' \gets \Frodo.\Decode(\bfM)$
+\end{algorithmic}
+\end{algorithm}
+   
+
+\subsection{Correctness of \INDCPA PKE}\label{sec:cpa-pke-correctness}
+
+The next lemma states bounds on the size of errors that can be handled
+by the decoding algorithm.
+
+\begin{lemma}\label{lem:CorrectnessDec}
+  Let $q = 2^D$, $B \leq D$. Then $\decode(\encode(k)+e) = k$ for any
+  $k,e\in \bbZ$ such that $0\leq k <2^B$ and
+  $-q/2^{B+1} \leq e < q/2^{B+1}$.
+\end{lemma}
+
+\begin{proof}
+  This follows directly from the fact that
+  $\decode(\encode(k)+e) = \lfloor k + e2^B/q \rceil \bmod 2^B$.
+\end{proof}
+
+\paragraph{Correctness of decryption:}
+The decryption algorithm $\FrodoPKE.\Dec$ computes 
+\begin{align*}
+\bfM 
+&= \bfC_2 - \bfC_1\bfS \\
+&= \bfV + \Frodo.\Encode(\mu) - (\bfS'\bfA + \bfE')\bfS \\
+&= \Frodo.\Encode(\mu) + \bfS'\bfB + \bfE'' - \bfS'\bfA\bfS - \bfE'\bfS \\
+&= \Frodo.\Encode(\mu) + \bfS'\bfA\bfS + \bfS'\bfE +  \bfE'' - \bfS'\bfA\bfS - \bfE'\bfS \\
+&= \Frodo.\Encode(\mu) + \bfS'\bfE + \bfE''- \bfE'\bfS \\
+&= \Frodo.\Encode(\mu) + \bfE'''
+\end{align*}
+for some error matrix $\bfE''' = \bfS' \bfE + \bfE'' - \bfE'
+\bfS$. Therefore, any $B$-bit substring of the message $\mu$
+corresponding to an entry of $\bfM$ will be decrypted correctly if the
+condition in \autoref{lem:CorrectnessDec} is satisfied for the
+corresponding entry of $\bfE'''$.
+
+\paragraph{Failure probability.}
+
+Each entry in the matrix $\bfE'''$ is the sum of~$2n$ products of two
+independent samples from $\chi$, and one more independent sample from
+$\chi$. Denote the distribution of this sum by $\chi'$. In the case of
+a power-of-$2$ modulus $q$, the probability of decryption failure for
+any single symbol is therefore the sum
+\[ p = \sum_{e \notin [-q/2^{B+1},q/2^{B+1})}\chi'(e) \enspace. \]
+The probability of decryption failure for the entire message can then
+be obtained using the union bound.
+
+For the distributions~$\chi$ we use, which have rather small
+support~$S_{\chi}$, the distribution $\chi'$ can be efficiently
+computed exactly. The probability that a product of two independent
+samples from~$\chi$ equals~$e$ (modulo~$q$) is simply
+\[ \sum_{(a,b)\in S_\chi\times S_\chi\; :\; a b = e \bmod q}
+  \chi(a)\cdot \chi(b) \enspace. \] Similarly, the probability that
+the sum of two entries assumes a certain value is given by the
+standard convolution sum.  \autoref{sec:params:sets} reports the
+failure probability for each of the selected parameter sets.
+
+\subsection{Transform from $\MINDCPA$ PKE to $\MINDCCA$ KEM}\label{sec:cca-transform}
+
+The Fujisaki--Okamoto transform \cite{C:FujOka99} constructs an \INDCCATwo-secure public-key encryption scheme, in the classical random oracle model, from a one-way-secure public-key encryption scheme (assuming the distribution of ciphertexts for each plaintext is sufficiently ``well spread'').
+Targhi and Unruh \cite{TCC:TarUnr16} gave a variant of the Fujisaki--Okamoto transform and showed its \INDCCATwo security against a quantum adversary in the quantum random oracle model under similar assumptions.
+The results of both \cite{C:FujOka99} and \cite{TCC:TarUnr16} proceed under the assumption that the public-key encryption scheme has perfect correctness, which is often not the case for lattice-based schemes (including ours).
+Hofheinz, H{\" o}velmanns, and Kiltz (HHK)~\cite{TCC:HofHovKil17} gave a variety of constructions, in a modular fashion, that in particular allow for a small probability of incorrect decryption.
+
+\cpnote{We need to be clearer about where SFO was defined, and what we've modified.}
+In this work, we propose a variant called Modified Salted Fujisaki--Okamoto with implicit rejection ($\SFOnotperpprime$) transform, which concatenates a uniformly random, public salt of bit length $\ell = \lengthsalt$. The salt value is made
+public as part of the ciphertext output by encapsulation. The security of the resulting KEM against multi-challenge attacks in the ROM was proven in a Master's thesis by Glabush~\cite{GlabushThesis}. In that same work, a QROM bound is proposed, with an accompanying proof sketch. A full proof was given in private communication~\cite{Multi-challenge}. Without the inclusion of a salt, with $n$ challenge ciphertexts, and $N$ ROM queries, an adversary can break $\MINDCCA$ security with probability $\frac{nN}{|\M|}$. With the inclusion of the salt, this advantage shrinks to $\frac{nN}{|\M||\saltlist|}$, where $|\saltlist|$ is the number of distinct salt values sampled by the challenge oracle.
+
+We apply the $\SFOnotperpprime$ (``Modified Salted FO with implicit
+rejection'') transform, which constructs an $\MINDCCA$-secure key
+encapsulation mechanism from an $\MINDCPA$ public-key encryption scheme
+and three hash functions; following~\cite{EuroSP:Kyber}, we make the
+following modifications (see \autoref{fig:kem-qfo} for notation),
+denoting the resulting transform $\SFOnotperpprime$:\plnote{It's not clear where these modifications are applied to to get the $\SFOnotperpprime$ transform.}
+\begin{itemize}
+\item A single hash function (with longer output) is used to compute $\bfr$ and $\bfk$.
+\item The computation of $\bfr$ and $\bfk$ also takes the public key $\pk$ as input.
+% Lewis says this is not a change:
+% \item The computation of the shared secret $\ssk$ also takes the encapsulation $c$ as input.
+\end{itemize}
+
+\begin{definition}[$\SFOnotperpprime$ transform]
+  \label{def:qfo}
+  Let $\PKE=(\KeyGen,\Enc,\Dec)$ be a public-key encryption scheme
+  with message space $\MsgSp$ and ciphertext space $\CtxtSp$, where
+  the randomness space of $\Enc$ is $\RandSp$.  Let
+  $\lengthsalt, \lengths, \lengthK, \lengthpkhash, \lengthss$ be parameters.  Let
+  $G_1\colon \{0,1\}^* \to \{0,1\}^\lengthpkhash$,
+  $G_2\colon \{0,1\}^* \to \RandSp \times \{0,1\}^\lengthK$, and
+  $F\colon \{0,1\}^* \to \{0,1\}^\lengthss$ be hash functions.  Define
+  $\KEMnotperpprime = \SFOnotperpprime[\PKE,G_1,G_2,F]$ to be the key
+  encapsulation mechanism as shown in \autoref{fig:kem-qfo}.
+\end{definition}
+
+As observed by Guo, Johansson, and Nilsson \cite{C:GuoJohNil20}, a timing side-channel enables key recovery if \cpnote{use label and ref here:} step 5 of $\KEMnotperpprime.\Decaps$ is not performed in constant time.
+
+\begin{figure}[h]
+\centering
+\fbox{
+\begin{minipage}[t]{0.4\textwidth}
+\underline{$\KEMnotperpprime.\KeyGen()$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $(\pk, \sk) \getsr \PKE.\KeyGen()$
+\STATE $\bfs \getsr \{0,1\}^\lengths$
+\STATE $\pkh \gets G_1(\pk)$
+\STATE $\sk' \gets (\sk, \bfs, \pk, \pkh)$
+\RETURN $(\pk, \sk')$
+\end{algorithmic}
+
+\medskip
+
+\underline{$\KEMnotperpprime.\Encaps(\pk)$:}
+\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $\mu \getsr \MsgSp$, {\color{black} $\salt \getsr \{0,1\}^{\lengthsalt}$}
+\STATE $(\bfr, \bfk) \gets G_2(G_1(\pk) \| \mu {\color{black} \| \salt})$
+\STATE $c \gets \PKE.\Enc(\mu, \pk; \bfr)$
+\STATE $\ssk \gets F(c {\color{black} \| \salt} \| \bfk)$
+\RETURN $(c {\color{black} \| \salt}, \ssk)$
+\end{algorithmic}
+\end{minipage}
+~
+\begin{minipage}[t]{0.5\textwidth}
+\underline{$\KEMnotperpprime.\Decaps(c {\color{black} \| \salt}, (\sk, \bfs, \pk, \pkh))$:}
+%\vspace{-1em}
+\begin{algorithmic}[1]
+\STATE $\mu' \gets \PKE.\Dec(c, \sk)$
+\STATE $(\bfr', \bfk') \gets G_2(\pkh \| \mu' {\color{black} \| \salt})$
+\STATE $\ssk_0' \gets F(c {\color{black} \| \salt} \| \bfk')$
+\STATE $\ssk_1' \gets F(c {\color{black} \| \salt} \| \bfs)$
+\STATE (in constant time) $\ssk' \gets \ssk_0'$ if $c = \PKE.\Enc(\mu', \pk; \bfr')$ else $\ssk' \gets \ssk_1'$
+\RETURN $\ssk'$
+\end{algorithmic}
+\end{minipage}
+}
+\caption{Construction of an \INDCCA-secure key encapsulation mechanism
+  $\KEMnotperpprime=\SFOnotperpprime[\PKE,G_1,G_2,F]$ from a public-key
+  encryption scheme $\PKE$ and hash functions $G_1$, $G_2$, and $F$.}
+\label{fig:kem-qfo}
+\end{figure}
+
+\begin{remark}
+If the use of $\salt$ is removed from the $\SFOnotperpprime$ transform in \autoref{fig:kem-qfo},
+it defaults to $\FOnotperpprime$ based on the standard Fujisaki--Okamoto transform~\cite{EuroSP:Kyber,NISTPQC-R3:FrodoKEM20}.
+$\FOnotperpprime$ is used to build the \eFrodoKEM variant, which restricts the number of ciphertexts generated per public key (see \autoref{sec:cca-kem} and \autoref{sec:strength:justification}).
+\end{remark}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "Main"
+%%% End:
