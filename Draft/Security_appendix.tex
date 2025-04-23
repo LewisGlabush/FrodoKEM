@@ -428,6 +428,7 @@ primitive $\calF$ to be an ideal ``domain expansion'' function expanding a small
 seed to a matrix $\bfA$. Critically, the security of the step depends on the properties of $\calG$ rather than randomness of the seed. The construction $\calC$ and primitive
 $\calG$ depend on whether we use $\AESOneTwoEight$ or $\SHAKE128$, modeled below as an ideal cipher and an ideal extendable-output function (XOF) respectively.
 
+\lewis{Do we need this subsection?}
 \paragraph{Using AES128 to generate $\bfA$.}
 \autoref{alg:genA_AES} generates the entries of $\bfA$ as $16$-bit values and then reduces each one modulo $q$. For simplicity, we assume that $\bfA$ consists of  $N=16n^2$ bits 
 and we set $M = N/128$. This means that $\bfA$ consists of $M$ $128$-bit
@@ -532,6 +533,7 @@ random number generation at one of the parties.
 
 \subsubsection{\INDCPA security}\label{sec:strength:cpa-pke}
 
+\lewis{Is this something that can be moved to the main document? We should handle $\MINDCPA$ security somehow - bounding it with a hybrid argument, but perhaps suggesting that we expect better-than-hybrid security.}
 In this section we show that $\FrodoPKE$, using any error distribution
 $\chi$ and uniformly random $\bfA$, is an \INDCPA-secure public-key
 encryption scheme based on the hardness of the learning with errors
